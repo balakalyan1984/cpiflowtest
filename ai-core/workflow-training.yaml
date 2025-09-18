@@ -1,0 +1,84 @@
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: cpiflow-training-pipeline
+  annotations:
+    scenarios.ai.sap.com/name: "CPIFLOW Optimizer"
+    scenarios.ai.sap.com/description: "Train CPI log classifier (LR/SGD) with drift baselines & insights"
+    executables.ai.sap.com/name: "cpiflow-model-training"
+    executables.ai.sap.com/description: "Outputs model.pkl + insights + baseline distributions"
+    artifacts.ai.sap.com/cpiflowdataset.kind: "dataset"
+    artifacts.ai.sap.com/cpiflowmodel.kind: "model"
+  labels:
+    scenarios.ai.sap.com/id: "cpiflow-optimizer-pro"
+    ai.sap.com/version: "6.0"
+spec:
+  imagePullSecrets:
+    - name: <your-docker-secret>
+  entrypoint: mypipeline
+  arguments:
+    parameters:
+      - name: TARGET_COLUMN
+        value: "CUSTOM_STATUS"
+      - name: DATA_FILE
+        value: "cpi_logs_500.csv"
+      - name: TRAINER
+        value: "LR"
+      - name: FINETUNE
+        value: "0"
+  templates:
+    - name: mypipeline
+      inputs:
+        artifacts:
+          - name: cpiflowdataset
+            path: /app/data
+          - name: prevmodel
+            path: /app/prev/prev_model.pkl
+            optional: true
+      outputs:
+        artifacts:
+          - name: cpiflowmodel
+            globalName: cpiflowmodel
+            path: /app/model/model.pkl
+            archive: { none: {} }
+          - name: cpiflowmetrics
+            globalName: cpiflowmetrics
+            path: /app/model/metrics.json
+            archive: { none: {} }
+          - name: cpiflowinsights
+            globalName: cpiflowinsights
+            path: /app/model/cpilog_artifact_insights.csv
+            archive: { none: {} }
+          - name: cpiflowhotspots
+            globalName: cpiflowhotspots
+            path: /app/model/cpilog_hotspots.csv
+            archive: { none: {} }
+          - name: cpiflowreport
+            globalName: cpiflowreport
+            path: /app/model/cpilog_insights_report.md
+            archive: { none: {} }
+      container:
+        image: docker.io/<your-namespace>/cpiflow-train:py312-v1
+        command: ["/bin/sh","-c"]
+        env:
+          - name: TARGET_COLUMN
+            value: "{{workflow.parameters.TARGET_COLUMN}}"
+          - name: DATA_PATH
+            value: "/app/data/{{workflow.parameters.DATA_FILE}}"
+          - name: MODEL_DIR
+            value: "/app/model"
+          - name: MODEL_PATH
+            value: "/app/model/model.pkl"
+          - name: TRAINER
+            value: "{{workflow.parameters.TRAINER}}"
+          - name: FINETUNE_MODE
+            value: "{{workflow.parameters.FINETUNE}}"
+          - name: PREV_MODEL_PATH
+            value: "/app/prev/prev_model.pkl"
+        args:
+          - >
+            set -e;
+            echo '--- /app/data ---'; ls -la /app/data || true;
+            if [ ! -f /app/prev/prev_model.pkl ]; then export FINETUNE_MODE=0; fi;
+            python /app/src/train_cpiflow_pipeline.py;
+            echo '--- /app/model ---'; ls -la /app/model || true;
