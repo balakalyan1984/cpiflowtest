@@ -31,20 +31,20 @@ spec:
         minReplicas: 1
         maxReplicas: 3
         containers:
-        - name: kserve-container
-          image: docker.io/balakalyandocker/cpilog-serve:py312-v1
-          command: ["/bin/sh","-c"]
-          args:
-            - >
-              set -e;
-              uvicorn --app-dir /app/src serve_cpiflow_kserve:app
-              --host 0.0.0.0 --port ${PORT:-8080}
-          env:
-            - name: STORAGE_URI
-              value: "{{inputs.artifacts.cpiflowmodel}}"
-            - name: LABELS_DIR
-              value: "/mnt/labels"
-          ports:
-            - name: http1
-              containerPort: 8080
-              protocol: TCP
+          - name: kserve-container
+            image: docker.io/balakalyandocker/cpilog-serve:py312-v1
+            command: ["/bin/sh","-c"]
+            args:
+              - >
+                set -e;
+                uvicorn --app-dir /app/src serve_cpiflow_kserve:app
+                --host 0.0.0.0 --port ${PORT:-8080}
+            env:
+              - name: STORAGE_URI
+                value: "{{inputs.artifacts.cpiflowmodel}}"
+              - name: LABELS_DIR
+                value: "/mnt/labels"
+            ports:
+              - name: http1
+                containerPort: 8080
+                protocol: TCP
