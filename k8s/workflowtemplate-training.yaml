@@ -15,7 +15,7 @@ metadata:
 
 spec:
   imagePullSecrets:
-    - name: milton-credentials
+    - name: <milton-credentials>
 
   entrypoint: mypipeline
 
@@ -42,7 +42,7 @@ spec:
               none: {}
 
       container:
-        image: docker.io/balakalyandocker/cpilog-train:py312-v1
+        image: docker.io/<balakalyandocker>/cpilog-train:py312-v1
         command: ["/bin/sh","-c"]
         env:
           - name: TARGET_COLUMN
@@ -61,3 +61,4 @@ spec:
             echo '--- /app/model (before) ---'; ls -la /app/model || true;
             python /app/src/train_cpi_pipeline.py;
             echo '--- /app/model (after) ---'; ls -la /app/model || true;
+
