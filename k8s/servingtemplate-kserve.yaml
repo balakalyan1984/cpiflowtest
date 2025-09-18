@@ -1,0 +1,46 @@
+apiVersion: ai.sap.com/v1alpha1
+kind: ServingTemplate
+metadata:
+  name: cpi-serving-pipeline
+  annotations:
+    scenarios.ai.sap.com/name: "CPI Logs Classifier"
+    scenarios.ai.sap.com/description: "Serving CPI Logs classifier via KServe"
+    executables.ai.sap.com/name: "cpimodelserving"
+    executables.ai.sap.com/description: "FastAPI server for CPI classifier"
+    artifacts.ai.sap.com/cpimodel.kind: "model"
+  labels:
+    scenarios.ai.sap.com/id: "cpi-logs-classifier"
+    ai.sap.com/version: "4.0"
+spec:
+  inputs:
+    artifacts:
+      - name: cpimodel
+  template:
+    apiVersion: "serving.kserve.io/v1beta1"
+    metadata:
+      annotations: |
+        autoscaling.knative.dev/metric: concurrency
+        autoscaling.knative.dev/target: 1
+        autoscaling.knative.dev/targetBurstCapacity: 0
+      labels: |
+        ai.sap.com/resourcePlan: starter
+    spec: |
+      predictor:
+        imagePullSecrets:
+          - name: <your-docker-secret>   # e.g., milton-credentials
+        minReplicas: 1
+        maxReplicas: 3
+        containers:
+        - name: kserve-container
+          image: docker.io/<your-namespace>/cpilog-serve:py312-v1
+          ports:
+            - containerPort: 9001
+              protocol: TCP
+          command: ["/bin/sh", "-c"]
+          args:
+            - >
+              set -e &&
+              uvicorn serve_cpi_kserve:app --host 0.0.0.0 --port 9001
+          env:
+            - name: STORAGE_URI
+              value: "{{inputs.artifacts.cpimodel}}"

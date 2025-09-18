@@ -1,0 +1,51 @@
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: cpi-training-pipeline
+  annotations:
+    scenarios.ai.sap.com/name: "CPI Logs Classifier"
+    scenarios.ai.sap.com/description: "Train a CPI log classifier (Pipeline: DictVectorizer+LR)"
+    executables.ai.sap.com/name: "CPI model training"
+    executables.ai.sap.com/description: "Trains and outputs single model.pkl"
+    artifacts.ai.sap.com/cpidataset.kind: "dataset"
+    artifacts.ai.sap.com/cpimodel.kind: "model"
+  labels:
+    scenarios.ai.sap.com/id: "cpi-logs-classifier"
+    ai.sap.com/version: "4.0"
+spec:
+  imagePullSecrets:
+    - name: <your-docker-secret> # e.g., milton-credentials
+  entrypoint: mypipeline
+  arguments:
+    parameters:
+      - name: TARGET_COLUMN
+        value: "CUSTOM_STATUS"
+      - name: DATA_FILE
+        value: "cpi_logs_500.csv"
+  templates:
+    - name: mypipeline
+      inputs:
+        artifacts:
+          - name: cpidataset
+            path: /app/data/   # AI Core downloads S3 object(s) here
+      outputs:
+        artifacts:
+          - name: cpimodel
+            globalName: cpimodel
+            path: /app/model/model.pkl
+            archive:
+              none: {}         # some runners still tar; serving handles .tgz
+      container:
+        image: docker.io/<your-namespace>/cpilog-train:py312-v1
+        command: ["/bin/sh", "-c"]
+        env:
+          - name: TARGET_COLUMN
+            value: "{{workflow.parameters.TARGET_COLUMN}}"
+          - name: DATA_PATH
+            value: "/app/data/{{workflow.parameters.DATA_FILE}}"
+          - name: MODEL_DIR
+            value: "/app/model"
+          - name: MODEL_PATH
+            value: "/app/model/model.pkl"
+        args:
+          - "python /app/src/train_cpi_pipeline.py"
