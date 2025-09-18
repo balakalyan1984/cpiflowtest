@@ -1,28 +1,28 @@
 apiVersion: ai.sap.com/v1alpha1
 kind: ServingTemplate
 metadata:
-  name: cpiflow-serving-pipeline
+  name: cpi-serving-pipeline
   annotations:
-    scenarios.ai.sap.com/name: "CPIFLOW Optimizer"
-    scenarios.ai.sap.com/description: "Serving via FastAPI on KServe"
-    executables.ai.sap.com/name: "cpiflow-model-serving"
+    scenarios.ai.sap.com/name: "CPI Logs Classifier"
+    scenarios.ai.sap.com/description: "Serving CPI Logs classifier via KServe"
+    executables.ai.sap.com/name: "cpimodelserving"
     executables.ai.sap.com/description: "FastAPI server for CPI classifier"
-    artifacts.ai.sap.com/cpiflowmodel.kind: "model"
+    artifacts.ai.sap.com/cpimodel.kind: "model"
   labels:
-    scenarios.ai.sap.com/id: "cpiflow-optimizer"
+    scenarios.ai.sap.com/id: "cpi-logs-classifier"
     ai.sap.com/version: "4.0"
 
 spec:
   inputs:
     artifacts:
-      - name: cpiflowmodel
+      - name: cpimodel
 
-  # KServe InferenceService embedded as YAML string
+  # Embed the KServe InferenceService as a YAML string
   template: |
     apiVersion: serving.kserve.io/v1beta1
     kind: InferenceService
     metadata:
-      name: cpiflow-serving
+      name: cpi-serving
       annotations:
         autoscaling.knative.dev/metric: concurrency
         autoscaling.knative.dev/target: "1"
@@ -37,15 +37,16 @@ spec:
         maxReplicas: 3
         containers:
           - name: kserve-container
-            image: docker.io/balakalyandocker/cpiflow-serve:py312-v1
+            image: docker.io/balakalyandocker/cpilog-serve:py312-v1
             command: ["/bin/sh", "-c"]
             args:
               - >
                 set -e;
-                uvicorn serve_cpiflow_kserve:app --host 0.0.0.0 --port ${PORT:-8080}
+                uvicorn --app-dir /app/src serve_cpi_kserve:app
+                --host 0.0.0.0 --port ${PORT:-8080}
             env:
               - name: STORAGE_URI
-                value: "{{inputs.artifacts.cpiflowmodel}}"
+                value: "{{inputs.artifacts.cpimodel}}"
             ports:
               - name: http1
                 containerPort: 8080
