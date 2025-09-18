@@ -12,6 +12,7 @@ metadata:
   labels:
     scenarios.ai.sap.com/id: "cpiflow-optimizer-pro"
     ai.sap.com/version: "6.0"
+
 spec:
   imagePullSecrets:
     - name: milton-credentials
@@ -21,11 +22,12 @@ spec:
       - name: TARGET_COLUMN
         value: "CUSTOM_STATUS"
       - name: DATA_FILE
-        value: "cpi_logs_500.csv"
+        value: "cpi_logs_500.csv"    # will auto-detect if missing
       - name: TRAINER
         value: "LR"
       - name: FINETUNE
         value: "0"
+
   templates:
     - name: mypipeline
       inputs:
@@ -40,8 +42,7 @@ spec:
           - name: cpiflowmodel
             globalName: cpiflowmodel
             path: /app/model/model.pkl
-            archive:
-              none: {}
+            archive: { none: {} }
       container:
         image: docker.io/balakalyandocker/cpilog-train:py312-v1
         imagePullPolicy: IfNotPresent
@@ -64,10 +65,20 @@ spec:
         args:
           - >
             set -euo pipefail;
+            echo '--- /app ---'; ls -la /app || true;
+            echo '--- /app/src ---'; ls -la /app/src || true;
             echo '--- /app/data ---'; ls -la /app/data || true;
             mkdir -p /app/model;
-            if [ ! -f /app/prev/prev_model.pkl ]; then export FINETUNE_MODE=0; fi;
-            python /app/src/train_cpiflow_pipeline.py;
+            # If DATA_PATH is wrong, auto-pick first CSV from dataset:
+            if [ ! -f "$DATA_PATH" ]; then
+              echo "WARN: $DATA_PATH not found. Auto-detecting CSV under /app/data";
+              export DATA_PATH="$(ls -1 /app/data/*.csv 2>/dev/null | head -n1 || true)";
+              [ -n "$DATA_PATH" ] || { echo "ERROR: No CSV found under /app/data"; exit 2; }
+              echo "Using DATA_PATH=$DATA_PATH";
+            fi
+            # Disable finetune if prev model missing
+            [ -f /app/prev/prev_model.pkl ] || export FINETUNE_MODE=0;
+            # IMPORTANT: use the script that exists in the cpilog image
+            python /app/src/train_cpi_pipeline.py;
             echo '--- /app/model ---'; ls -la /app/model || true;
-            # Final guard to avoid artifact-missing:
-            test -f /app/model/model.pkl || { echo "model.pkl missing"; exit 2; }
+            test -f /app/model/model.pkl || { echo "ERROR: model.pkl missing"; exit 2; }
