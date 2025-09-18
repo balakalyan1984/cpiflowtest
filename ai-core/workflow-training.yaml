@@ -6,10 +6,9 @@ metadata:
     scenarios.ai.sap.com/name: "CPIFLOW Optimizer"
     scenarios.ai.sap.com/description: "Train CPI log classifier (LR/SGD) with drift baselines & insights"
     executables.ai.sap.com/name: "cpiflow-model-training"
-    executables.ai.sap.com/description: "Outputs model.pkl + insights + baseline distributions"
+    executables.ai.sap.com/description: "Outputs model.pkl"
     artifacts.ai.sap.com/cpiflowdataset.kind: "dataset"
     artifacts.ai.sap.com/cpiflowmodel.kind: "model"
-    artifacts.ai.sap.com/prevmodel.kind: "model"   # optional previous model input
   labels:
     scenarios.ai.sap.com/id: "cpiflow-optimizer-pro"
     ai.sap.com/version: "6.0"
@@ -43,28 +42,8 @@ spec:
             path: /app/model/model.pkl
             archive:
               none: {}
-          - name: cpiflowmetrics
-            globalName: cpiflowmetrics
-            path: /app/model/metrics.json
-            archive:
-              none: {}
-          - name: cpiflowinsights
-            globalName: cpiflowinsights
-            path: /app/model/cpilog_artifact_insights.csv
-            archive:
-              none: {}
-          - name: cpiflowhotspots
-            globalName: cpiflowhotspots
-            path: /app/model/cpilog_hotspots.csv
-            archive:
-              none: {}
-          - name: cpiflowreport
-            globalName: cpiflowreport
-            path: /app/model/cpilog_insights_report.md
-            archive:
-              none: {}
       container:
-        image: docker.io/balakalyandocker/cpilog-train:py312-v1   # <-- known-good image
+        image: docker.io/balakalyandocker/cpilog-train:py312-v1
         imagePullPolicy: IfNotPresent
         command: ["/bin/sh","-c"]
         env:
@@ -86,6 +65,9 @@ spec:
           - >
             set -euo pipefail;
             echo '--- /app/data ---'; ls -la /app/data || true;
+            mkdir -p /app/model;
             if [ ! -f /app/prev/prev_model.pkl ]; then export FINETUNE_MODE=0; fi;
             python /app/src/train_cpiflow_pipeline.py;
             echo '--- /app/model ---'; ls -la /app/model || true;
+            # Final guard to avoid artifact-missing:
+            test -f /app/model/model.pkl || { echo "model.pkl missing"; exit 2; }
