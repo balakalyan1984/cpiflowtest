@@ -32,12 +32,12 @@ spec:
     spec:
       predictor:
         imagePullSecrets:
-          - name: milton-credentials
+          - name: <milton-credentials>
         minReplicas: 1
         maxReplicas: 3
         containers:
           - name: kserve-container
-            image: docker.io/balakalyandocker/cpilog-serve:py312-v1
+            image: docker.io/<balakalyandocker>/cpilog-serve:py312-v1
             command: ["/bin/sh", "-c"]
             args:
               - >
@@ -57,3 +57,4 @@ spec:
               limits:
                 cpu: "1"
                 memory: "1Gi"
+
