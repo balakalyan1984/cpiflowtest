@@ -3,9 +3,9 @@ kind: ServingTemplate
 metadata:
   name: cpi-serving-pipeline
   annotations:
-    scenarios.ai.sap.com/name: "CPI2 Logs Classifier"
+    scenarios.ai.sap.com/name: "CPI Logs Classifier"
     scenarios.ai.sap.com/description: "Serving CPI Logs classifier via KServe"
-    executables.ai.sap.com/name: "cpimodelserving2"
+    executables.ai.sap.com/name: "cpimodelserving"
     executables.ai.sap.com/description: "FastAPI server for CPI classifier"
     artifacts.ai.sap.com/cpimodel.kind: "model"
   labels:
@@ -44,4 +44,5 @@ spec:
           env:
             - name: STORAGE_URI
               value: "{{inputs.artifacts.cpimodel}}"
+
 
