@@ -11,12 +11,10 @@ metadata:
   labels:
     scenarios.ai.sap.com/id: "cpiflow-optimizer-pro"
     ai.sap.com/version: "6.0"
-
 spec:
   inputs:
     artifacts:
       - name: cpiflowmodel
-
   template:
     apiVersion: "serving.kserve.io/v1beta1"
     metadata:
@@ -49,3 +47,4 @@ spec:
           ports:
             - name: http1
               containerPort: 8080
+              protocol: TCP
