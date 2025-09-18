@@ -3,9 +3,9 @@ kind: WorkflowTemplate
 metadata:
   name: cpi-training-pipeline
   annotations:
-    scenarios.ai.sap.com/name: "CPI Logs Classifier"
+    scenarios.ai.sap.com/name: "CPI2 Logs Classifier"
     scenarios.ai.sap.com/description: "Train a CPI log classifier (Pipeline: DictVectorizer+LR)"
-    executables.ai.sap.com/name: "CPI model training"
+    executables.ai.sap.com/name: "CPI2 model training"
     executables.ai.sap.com/description: "Trains and outputs single model.pkl"
     artifacts.ai.sap.com/cpidataset.kind: "dataset"
     artifacts.ai.sap.com/cpimodel.kind: "model"
@@ -49,3 +49,4 @@ spec:
             value: "/app/model/model.pkl"
         args:
           - "python /app/src/train_cpi_pipeline.py"
+
