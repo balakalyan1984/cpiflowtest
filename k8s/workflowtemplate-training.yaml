@@ -31,7 +31,7 @@ spec:
       inputs:
         artifacts:
           - name: cpiflowdataset
-            path: /app/data            # directory mount for dataset artifact
+            path: /app/data  # directory mount for dataset artifact
 
       outputs:
         artifacts:
@@ -63,6 +63,7 @@ spec:
 
       container:
         image: docker.io/balakalyandocker/cpiflow-train:py312-v1
+        imagePullPolicy: IfNotPresent
         command: ["/bin/sh", "-c"]
         env:
           - name: TARGET_COLUMN
@@ -75,7 +76,7 @@ spec:
             value: "/app/model/model.pkl"
         args:
           - >
-            set -e;
+            set -euo pipefail;
             echo '--- /app/data ---'; ls -la /app/data || true;
             python /app/src/train_cpiflow_pipeline.py;
             echo '--- /app/model ---'; ls -la /app/model || true;
