@@ -9,6 +9,7 @@ metadata:
     executables.ai.sap.com/description: "Outputs model.pkl + insights + baseline distributions"
     artifacts.ai.sap.com/cpiflowdataset.kind: "dataset"
     artifacts.ai.sap.com/cpiflowmodel.kind: "model"
+    artifacts.ai.sap.com/prevmodel.kind: "model"   # optional previous model input
   labels:
     scenarios.ai.sap.com/id: "cpiflow-optimizer-pro"
     ai.sap.com/version: "6.0"
@@ -40,25 +41,31 @@ spec:
           - name: cpiflowmodel
             globalName: cpiflowmodel
             path: /app/model/model.pkl
-            archive: { none: {} }
+            archive:
+              none: {}
           - name: cpiflowmetrics
             globalName: cpiflowmetrics
             path: /app/model/metrics.json
-            archive: { none: {} }
+            archive:
+              none: {}
           - name: cpiflowinsights
             globalName: cpiflowinsights
             path: /app/model/cpilog_artifact_insights.csv
-            archive: { none: {} }
+            archive:
+              none: {}
           - name: cpiflowhotspots
             globalName: cpiflowhotspots
             path: /app/model/cpilog_hotspots.csv
-            archive: { none: {} }
+            archive:
+              none: {}
           - name: cpiflowreport
             globalName: cpiflowreport
             path: /app/model/cpilog_insights_report.md
-            archive: { none: {} }
+            archive:
+              none: {}
       container:
-        image: docker.io/balakalyandocker/cpiflow-train:py312-v1
+        image: docker.io/balakalyandocker/cpilog-train:py312-v1   # <-- known-good image
+        imagePullPolicy: IfNotPresent
         command: ["/bin/sh","-c"]
         env:
           - name: TARGET_COLUMN
@@ -77,7 +84,7 @@ spec:
             value: "/app/prev/prev_model.pkl"
         args:
           - >
-            set -e;
+            set -euo pipefail;
             echo '--- /app/data ---'; ls -la /app/data || true;
             if [ ! -f /app/prev/prev_model.pkl ]; then export FINETUNE_MODE=0; fi;
             python /app/src/train_cpiflow_pipeline.py;
