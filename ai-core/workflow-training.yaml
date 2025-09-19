@@ -42,7 +42,7 @@ spec:
             optional: true
 
       container:
-        image: docker.io/balakalyandocker/cpiflow-train:py312-v1
+        image: docker.io/balakalyandocke/cpiflow-train:py312-v1
         imagePullPolicy: IfNotPresent     # consider: Always during dev
         command: ["/bin/sh","-c"]
         env:
