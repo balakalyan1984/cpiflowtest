@@ -34,7 +34,7 @@ spec:
         maxReplicas: 2
         containers:
           - name: kserve-container
-            image: docker.io/balakalyandocker/cpilog-serve:py312-v1
+            image: docker.io/balakalyandocker/cpiflow-serve:py312-v1
             command: ["/bin/sh","-c"]
             args:
               - >
