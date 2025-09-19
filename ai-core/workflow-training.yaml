@@ -43,7 +43,7 @@ spec:
 
       # --- Template TYPE: container (must exist exactly once) ---
       container:
-        image: docker.io/balakalyandocker/cpilog-train:py312-v1
+        image: docker.io/balakalyandocker/cpiflow-train:py312-v1
         imagePullPolicy: IfNotPresent
         command: ["/bin/sh","-c"]
         env:
