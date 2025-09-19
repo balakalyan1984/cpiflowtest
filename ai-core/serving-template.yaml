@@ -4,7 +4,7 @@ metadata:
   name: cpiflow-serving-pipeline
   annotations:
     scenarios.ai.sap.com/name: "CPIFLOW Optimizer PRO"
-    scenarios.ai.sap.com/description: "FastAPI on KServe with drift, signatures, forecast, explain, prioritize, label"
+    scenarios.ai.sap.com/description: "FastAPI on KServe"
     executables.ai.sap.com/name: "cpiflow-model-serving"
     executables.ai.sap.com/description: "All-in-one CPI classifier API"
     artifacts.ai.sap.com/cpiflowmodel.kind: "model"
@@ -29,9 +29,9 @@ spec:
     spec:
       predictor:
         imagePullSecrets:
-          - name: milton-credentials
+          - name: milton-credentials   # remove if your image is public
         minReplicas: 1
-        maxReplicas: 3
+        maxReplicas: 2
         containers:
           - name: kserve-container
             image: docker.io/balakalyandocker/cpilog-serve:py312-v1
