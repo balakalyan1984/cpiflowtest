@@ -16,20 +16,20 @@ spec:
     artifacts:
       - name: cpiflowmodel
   template:
-    apiVersion: serving.kserve.io/v1beta1
+    apiVersion: "serving.kserve.io/v1beta1"
     kind: InferenceService
     metadata:
       name: cpiflow-serving
-      annotations:
+      annotations: |-
         autoscaling.knative.dev/metric: concurrency
         autoscaling.knative.dev/target: "1"
         autoscaling.knative.dev/targetBurstCapacity: "0"
-      labels:
+      labels: |-
         ai.sap.com/resourcePlan: starter
-    spec:
+    spec: |-
       predictor:
         imagePullSecrets:
-          - name: milton-credentials   # remove if your image is public
+          - name: milton-credentials
         minReplicas: 1
         maxReplicas: 2
         containers:
