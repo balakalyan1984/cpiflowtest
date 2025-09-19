@@ -9,7 +9,7 @@ metadata:
     executables.ai.sap.com/description: "Outputs model.pkl + metrics + insights"
     artifacts.ai.sap.com/cpiflowdataset.kind: "dataset"
     artifacts.ai.sap.com/cpiflowmodel.kind: "model"
-    artifacts.ai.sap.com/prevmodel.kind: "model"
+    artifacts.ai.sap.com/prevmodel.kind: "model"   # optional previous model (fine-tune)
   labels:
     scenarios.ai.sap.com/id: "cpiflow-optimizer-pro"
     ai.sap.com/version: "6.0"
@@ -27,9 +27,9 @@ spec:
       - name: DATA_FILE
         value: "cpi_logs_500.csv"
       - name: TRAINER
-        value: "LR"        # LR or SGD
+        value: "LR"       # LR or SGD
       - name: FINETUNE
-        value: "0"         # 1 to finetune if prev model is present
+        value: "0"        # 1 to fine-tune if prev model is present
 
   templates:
     - name: mypipeline
@@ -41,10 +41,9 @@ spec:
             path: /app/prev/prev_model.pkl
             optional: true
 
-      # --- Template TYPE: container (must exist exactly once) ---
       container:
         image: docker.io/balakalyandocker/cpiflow-train:py312-v1
-        imagePullPolicy: IfNotPresent
+        imagePullPolicy: IfNotPresent     # consider: Always during dev
         command: ["/bin/sh","-c"]
         env:
           - name: TARGET_COLUMN
@@ -61,9 +60,17 @@ spec:
             value: "{{workflow.parameters.FINETUNE}}"
           - name: PREV_MODEL_PATH
             value: "/app/prev/prev_model.pkl"
+        # Optional: add resources for better scheduling
+        # resources:
+        #   requests:
+        #     cpu: "500m"
+        #     memory: "1Gi"
+        #   limits:
+        #     cpu: "2"
+        #     memory: "4Gi"
         args:
           - |
-            set -eu
+            set -euo pipefail
             echo '--- /app ---'; ls -la /app || true
             echo '--- /app/src ---'; ls -la /app/src || true
             echo '--- /app/data ---'; ls -la /app/data || true
@@ -87,18 +94,18 @@ spec:
               export FINETUNE_MODE=0
             fi
 
-            # Run the training script included in the image
+            # Run training
             python /app/src/train_cpi_pipeline.py
 
             echo '--- /app/model ---'; ls -la /app/model || true
 
-            # Required artifact must exist
+            # Ensure required artifact exists
             if [ ! -f /app/model/model.pkl ]; then
               echo "ERROR: model.pkl missing"
               exit 2
             fi
 
-            # Create placeholders for optional artifacts so Argo can upload them
+            # Create placeholders for optional outputs so Argo can upload them
             [ -f /app/model/metrics.json ] || printf '{}' > /app/model/metrics.json
             [ -f /app/model/cpilog_artifact_insights.csv ] || printf 'artifact,metric,value\n' > /app/model/cpilog_artifact_insights.csv
             [ -f /app/model/cpilog_hotspots.csv ] || printf 'field,score\n' > /app/model/cpilog_hotspots.csv
