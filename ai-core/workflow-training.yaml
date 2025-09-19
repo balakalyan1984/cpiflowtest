@@ -25,11 +25,11 @@ spec:
       - name: TARGET_COLUMN
         value: "CUSTOM_STATUS"
       - name: DATA_FILE
-        value: "cpi_logs_500.csv"  # auto-detected if missing
+        value: "cpi_logs_500.csv"   # will auto-detect if missing
       - name: TRAINER
-        value: "LR"                # LR or SGD
+        value: "LR"                 # LR or SGD
       - name: FINETUNE
-        value: "0"                 # 1 to finetune with prev model
+        value: "0"                  # 1 to finetune if prev model provided
 
   templates:
     - name: mypipeline
@@ -50,79 +50,4 @@ spec:
           - name: cpiflowmetrics
             globalName: cpiflowmetrics
             path: /app/model/metrics.json
-            archive: { none: {} }
-          - name: cpiflowinsights
-            globalName: cpiflowinsights
-            path: /app/model/cpilog_artifact_insights.csv
-            archive: { none: {} }
-          - name: cpiflowhotspots
-            globalName: cpiflowhotspots
-            path: /app/model/cpilog_hotspots.csv
-            archive: { none: {} }
-          - name: cpiflowreport
-            globalName: cpiflowreport
-            path: /app/model/cpilog_insights_report.md
-            archive: { none: {} }
-
-      container:
-        image: docker.io/balakalyandocker/cpilog-train:py312-v1
-        imagePullPolicy: IfNotPresent
-        command: ["/bin/sh","-c"]
-        env:
-          - name: TARGET_COLUMN
-            value: "{{workflow.parameters.TARGET_COLUMN}}"
-          - name: DATA_PATH
-            value: "/app/data/{{workflow.parameters.DATA_FILE}}"
-          - name: MODEL_DIR
-            value: "/app/model"
-          - name: MODEL_PATH
-            value: "/app/model/model.pkl"
-          - name: TRAINER
-            value: "{{workflow.parameters.TRAINER}}"
-          - name: FINETUNE_MODE
-            value: "{{workflow.parameters.FINETUNE}}"
-          - name: PREV_MODEL_PATH
-            value: "/app/prev/prev_model.pkl"
-        args:
-          - >
-            set -eu;
-            echo '--- /app ---'; ls -la /app || true;
-            echo '--- /app/src ---'; ls -la /app/src || true;
-            echo '--- /app/data ---'; ls -la /app/data || true;
-
-            # Ensure output dir exists
-            mkdir -p /app/model;
-
-            # If DATA_PATH doesn't exist, auto-pick first CSV from dataset
-            if [ ! -f "$DATA_PATH" ]; then
-              echo "WARN: $DATA_PATH not found. Auto-detecting CSV under /app/data";
-              DATA_PATH="$(ls -1 /app/data/*.csv 2>/dev/null | head -n1 || true)"
-              if [ -z "$DATA_PATH" ]; then
-                echo "ERROR: No CSV found under /app/data";
-                exit 2
-              fi
-              echo "Using DATA_PATH=$DATA_PATH"
-              export DATA_PATH
-            fi
-
-            # Disable finetune if prev model missing
-            if [ ! -f /app/prev/prev_model.pkl ]; then
-              export FINETUNE_MODE=0
-            fi
-
-            # Call the script that exists in this image
-            python /app/src/train_cpi_pipeline.py
-
-            echo '--- /app/model ---'; ls -la /app/model || true;
-
-            # Guard: required artifact must exist
-            if [ ! -f /app/model/model.pkl ]; then
-              echo "ERROR: model.pkl missing"
-              exit 2
-            fi
-
-            # Create placeholders for optional artifacts if script skipped them
-            [ -f /app/model/metrics.json ] || echo '{}' > /app/model/metrics.json
-            [ -f /app/model/cpilog_artifact_insights.csv ] || echo 'artifact,metric,value' > /app/model/cpilog_artifact_insights.csv
-            [ -f /app/model/cpilog_hotspots.csv ] || echo 'field,score' > /app/model/cpilog_hotspots.csv
-            [ -f /app/model/cpilog_insights_report.md ] || echo '# CPI Insights (empty)' > /app/model/cpilog_insights_report.md
+            archive:
