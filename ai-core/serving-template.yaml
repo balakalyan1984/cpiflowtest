@@ -16,15 +16,17 @@ spec:
     artifacts:
       - name: cpiflowmodel
   template:
-    apiVersion: "serving.kserve.io/v1beta1"
+    apiVersion: serving.kserve.io/v1beta1
+    kind: InferenceService
     metadata:
-      annotations: |
+      name: cpiflow-serving
+      annotations:
         autoscaling.knative.dev/metric: concurrency
-        autoscaling.knative.dev/target: 1
-        autoscaling.knative.dev/targetBurstCapacity: 0
-      labels: |
+        autoscaling.knative.dev/target: "1"
+        autoscaling.knative.dev/targetBurstCapacity: "0"
+      labels:
         ai.sap.com/resourcePlan: starter
-    spec: |
+    spec:
       predictor:
         imagePullSecrets:
           - name: milton-credentials
@@ -37,14 +39,23 @@ spec:
             args:
               - >
                 set -e;
-                uvicorn --app-dir /app/src serve_cpiflow_kserve:app
+                exec uvicorn --app-dir /app/src serve_cpiflow_kserve:app
                 --host 0.0.0.0 --port ${PORT:-8080}
             env:
               - name: STORAGE_URI
                 value: "{{inputs.artifacts.cpiflowmodel}}"
+              - name: MODEL_MOUNT_DIR
+                value: "/mnt/models"
               - name: LABELS_DIR
                 value: "/mnt/labels"
             ports:
               - name: http1
                 containerPort: 8080
                 protocol: TCP
+            resources:
+              requests:
+                cpu: "100m"
+                memory: "256Mi"
+              limits:
+                cpu: "1"
+                memory: "1Gi"
