@@ -5,12 +5,12 @@ metadata:
   annotations:
     scenarios.ai.sap.com/name: "CPIFLOW Optimizer PRO"
     scenarios.ai.sap.com/description: "FastAPI on KServe"
-    executables.ai.sap.com/name: "cpiflow-model-serving"
+    executables.ai.sap.com/name: "cpiflow-model-serving"        # ✅ DNS-label style, no spaces
     executables.ai.sap.com/description: "CPI classifier API"
     artifacts.ai.sap.com/cpiflowmodel.kind: "model"
   labels:
     scenarios.ai.sap.com/id: "cpiflow-optimizer-pro"
-    ai.sap.com/version: "7.4"   # bump to force a new Revision
+    ai.sap.com/version: "7.3"
 spec:
   inputs:
     artifacts:
@@ -33,47 +33,22 @@ spec:
         containers:
         - name: kserve-container
           image: docker.io/balakalyandocker/cpiflow-serve:py312-v1
-          command: ["/bin/sh","-lc"]          # use -l -c; and keep args as a literal block (|) below
-          args: |
-            set -e
-            export MODEL_MOUNT_DIR="${MODEL_MOUNT_DIR:-/mnt/models}"
-
-            # Auto-descend up to 3 single-child wrapper folders via Python (avoids shell for/done issues)
-            MODEL_MOUNT_DIR="$(python - <<'PY'
-import os, sys
-p=os.environ.get("MODEL_MOUNT_DIR","/mnt/models")
-for _ in range(3):
-    try:
-        items=[e for e in os.listdir(p) if not e.startswith('.')]
-    except Exception:
-        break
-    if len(items)==1:
-        q=os.path.join(p, items[0])
-        if os.path.isdir(q):
-            p=q
-            continue
-    break
-print(p)
-PY
-)"
-            export MODEL_MOUNT_DIR
-
-            # (Optional) quick preflight: fail clearly if not a real pickle
-            python - <<'PY'
-import os, sys, joblib, traceback
-root=os.environ.get("MODEL_MOUNT_DIR","/mnt/models")
-cands=[os.path.join(root,"model.pkl"), os.path.join(root,"pipeline.pkl")]
-exist=[p for p in cands if os.path.exists(p)]
-if not exist:
-    print("NO-MODEL-FILE at", root); sys.exit(2)
-p=exist[0]
-try:
-    joblib.load(p); print("OK:", p)
-except Exception as e:
-    print("LOAD-ERR:", p, repr(e)); traceback.print_exc(); sys.exit(3)
-PY
-
-            exec uvicorn --app-dir /app/src serve_cpiflow_kserve:app --host 0.0.0.0 --port ${PORT:-8080}
+          command: ["/bin/sh","-c"]
+          args:
+            - >
+              set -e &&
+              # descend up to 3 wrapper dirs (e.g., aicoretutorial/<hash>/app/model)
+              export MODEL_MOUNT_DIR="${MODEL_MOUNT_DIR:-/mnt/models}" &&
+              for i in 1 2 3; do
+                if [ -d "$MODEL_MOUNT_DIR" ]; then
+                  c="$(ls -1 "$MODEL_MOUNT_DIR" | wc -l | tr -d ' ')" ;
+                  if [ "$c" = "1" ]; then
+                    o="$(ls -1 "$MODEL_MOUNT_DIR")" ;
+                    [ -d "$MODEL_MOUNT_DIR/$o" ] && MODEL_MOUNT_DIR="$MODEL_MOUNT_DIR/$o" && continue ;
+                  fi ;
+                fi ; break ;
+              done &&
+              uvicorn --app-dir /app/src serve_cpiflow_kserve:app --host 0.0.0.0 --port ${PORT:-8080}
           env:
             - name: STORAGE_URI
               value: "{{inputs.artifacts.cpiflowmodel}}"
