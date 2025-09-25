@@ -1,4 +1,3 @@
-# cpiflow-training-pipeline.yaml
 apiVersion: argoproj.io/v1alpha1
 kind: WorkflowTemplate
 metadata:
@@ -6,15 +5,17 @@ metadata:
   annotations:
     scenarios.ai.sap.com/name: "CPIFLOW Optimizer"
     scenarios.ai.sap.com/description: "Train CPI log classifier"
-    executables.ai.sap.com/name: "cpiflow-model-training"
+    executables.ai.sap.com/name: "CPIFLOW model training"
     executables.ai.sap.com/description: "Produces flat model.pkl for serving"
     artifacts.ai.sap.com/cpiflowdataset.kind: "dataset"
     artifacts.ai.sap.com/cpiflowmodel.kind: "model"
   labels:
     scenarios.ai.sap.com/id: "cpiflow-optimizer-pro"
-    ai.sap.com/version: "7.1"
+    ai.sap.com/version: "7.2"
 spec:
-  entrypoint: main
+  imagePullSecrets:
+    - name: milton-credentials
+  entrypoint: mypipeline
   arguments:
     parameters:
       - name: TARGET_COLUMN
@@ -24,41 +25,43 @@ spec:
       - name: TRAINER
         value: "LR"
   templates:
-    - name: main
-      inputs:
-        artifacts:
-          - name: cpiflowdataset
-            path: /app/data
-      container:
-        image: docker.io/balakalyandocker/cpiflow-train:py312-v1
-        imagePullPolicy: IfNotPresent
-        command: ["/bin/sh","-c"]
-        env:
-          - name: TARGET_COLUMN
-            value: "{{workflow.parameters.TARGET_COLUMN}}"
-          - name: DATA_PATH
-            value: "/app/data/{{workflow.parameters.DATA_FILE}}"
-          - name: MODEL_DIR
-            value: "/app/model"
-          - name: MODEL_PATH
-            value: "/app/model/model.pkl"
-          - name: TRAINER
-            value: "{{workflow.parameters.TRAINER}}"
-        args:
-          - |
-            set -euo pipefail
-            mkdir -p /app/model
-            if [ ! -f "$DATA_PATH" ]; then
-              DATA_PATH="$(ls -1 /app/data/*.csv 2>/dev/null | head -n1 || true)"
-              [ -z "$DATA_PATH" ] && { echo "ERROR: No CSV under /app/data"; exit 2; }
-              export DATA_PATH
-            fi
-            python /app/src/train_cpi_pipeline.py
-            [ -f /app/model/model.pkl ] || { echo "ERROR: model.pkl missing"; exit 2; }
-            mkdir -p /app/export
-            cp -v /app/model/model.pkl /app/export/model.pkl
-      outputs:
-        artifacts:
-          - name: cpiflowmodel
-            globalName: cpiflowmodel
-            path: /app/export
+  - name: mypipeline
+    inputs:
+      artifacts:
+        - name: cpiflowdataset
+          path: /app/data/
+    outputs:
+      artifacts:
+        - name: cpiflowmodel
+          globalName: cpiflowmodel
+          path: /app/export/           # <-- directory; flat export with model.pkl at root
+          archive:
+            none: {}
+    container:
+      image: docker.io/balakalyandocker/cpiflow-train:py312-v1
+      command: ["/bin/sh","-c"]
+      env:
+        - name: TARGET_COLUMN
+          value: "{{workflow.parameters.TARGET_COLUMN}}"
+        - name: DATA_PATH
+          value: "/app/data/{{workflow.parameters.DATA_FILE}}"
+        - name: MODEL_DIR
+          value: "/app/model"
+        - name: MODEL_PATH
+          value: "/app/model/model.pkl"
+        - name: TRAINER
+          value: "{{workflow.parameters.TRAINER}}"
+      args:
+        - |
+          set -euo pipefail
+          mkdir -p /app/model
+          if [ ! -f "$DATA_PATH" ]; then
+            DATA_PATH="$(ls -1 /app/data/*.csv 2>/dev/null | head -n1 || true)"
+            [ -z "$DATA_PATH" ] && { echo "ERROR: No CSV under /app/data"; exit 2; }
+            export DATA_PATH
+          fi
+          python /app/src/train_cpi_pipeline.py
+          [ -f /app/model/model.pkl ] || { echo "ERROR: model.pkl missing"; exit 2; }
+          # flat, writable export directory for AI Core
+          mkdir -p /app/export
+          cp -v /app/model/model.pkl /app/export/model.pkl
