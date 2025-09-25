@@ -10,7 +10,7 @@ metadata:
     artifacts.ai.sap.com/cpiflowmodel.kind: "model"
   labels:
     scenarios.ai.sap.com/id: "cpiflow-optimizer-pro"
-    ai.sap.com/version: "6.0"
+    ai.sap.com/version: "6.2"   # bump to force a new Knative Revision
 spec:
   inputs:
     artifacts:
@@ -28,19 +28,18 @@ spec:
         ai.sap.com/resourcePlan: starter
     spec: |-
       predictor:
-        imagePullSecrets:
-          - name: milton-credentials
         minReplicas: 1
         maxReplicas: 2
         containers:
           - name: kserve-container
             image: docker.io/balakalyandocker/cpiflow-serve:py312-v1
-            command: ["/bin/sh","-c"]
+            command: ["/bin/sh","-lc"]
             args:
-              - >
-                set -e;
-                exec uvicorn --app-dir /app/src serve_cpiflow_kserve:app
-                --host 0.0.0.0 --port ${PORT:-8080}
+              - |
+                set -e
+                # With flattened export, model is at /mnt/models/model.pkl
+                exec uvicorn --app-dir /app/src serve_cpiflow_kserve:app \
+                  --host 0.0.0.0 --port ${PORT:-8080}
             env:
               - name: STORAGE_URI
                 value: "{{inputs.artifacts.cpiflowmodel}}"
@@ -52,6 +51,12 @@ spec:
               - name: http1
                 containerPort: 8080
                 protocol: TCP
+            readinessProbe:
+              httpGet:
+                path: /health
+                port: 8080
+              initialDelaySeconds: 2
+              periodSeconds: 5
             resources:
               requests:
                 cpu: "100m"
