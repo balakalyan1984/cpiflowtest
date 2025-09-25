@@ -7,10 +7,10 @@ metadata:
     executables.ai.sap.com/description: "All-in-one CPI classifier API"
     scenarios.ai.sap.com/name: "CPIFLOW Optimizer PRO"
     scenarios.ai.sap.com/description: "FastAPI on KServe"
-    artifacts.ai.sap.com/cpiflowmodel.kind: "model"                 # declares expected input artifact kind
+    artifacts.ai.sap.com/cpiflowmodel.kind: "model"                 # declare input artifact kind
   labels:
     scenarios.ai.sap.com/id: "cpiflow-optimizer-pro"
-    ai.sap.com/version: "6.8"                                       # bump to force new Revision
+    ai.sap.com/version: "6.9"                                       # bump to force new Revision
 spec:
   inputs:
     artifacts:
@@ -20,13 +20,12 @@ spec:
     kind: InferenceService
     metadata:
       name: cpiflow-serving
-      annotations: |-
-        autoscaling.knative.dev/metric: concurrency
-        autoscaling.knative.dev/target: "1"
-        autoscaling.knative.dev/targetBurstCapacity: "0"
-      labels: |-
-        ai.sap.com/resourcePlan: starter
-    spec: |-
+      # *** MUST BE STRING ***
+      annotations: "{\"autoscaling.knative.dev/metric\":\"concurrency\",\"autoscaling.knative.dev/target\":\"1\",\"autoscaling.knative.dev/targetBurstCapacity\":\"0\"}"
+      # *** MUST BE STRING ***
+      labels: "{\"ai.sap.com/resourcePlan\":\"starter\"}"
+    # *** MUST BE STRING ***
+    spec: |
       predictor:
         minReplicas: 1
         maxReplicas: 2
@@ -38,7 +37,7 @@ spec:
               - |
                 set -e
                 export MODEL_MOUNT_DIR="${MODEL_MOUNT_DIR:-/mnt/models}"
-                # descend through up to THREE single-child directories (tolerate wrappers)
+                # tolerate up to 3 wrapper levels (aicoretutorial/<hash>/app/model)
                 for i in 1 2 3; do
                   if [ -d "$MODEL_MOUNT_DIR" ]; then
                     c="$(ls -1 "$MODEL_MOUNT_DIR" | wc -l | tr -d ' ')"
