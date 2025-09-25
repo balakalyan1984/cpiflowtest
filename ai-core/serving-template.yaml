@@ -10,7 +10,7 @@ metadata:
     artifacts.ai.sap.com/cpiflowmodel.kind: "model"
   labels:
     scenarios.ai.sap.com/id: "cpiflow-optimizer-pro"
-    ai.sap.com/version: "6.2"   # bump to force a new Knative Revision
+    ai.sap.com/version: "6.5"   # bump to force a new Knative Revision
 spec:
   inputs:
     artifacts:
@@ -37,7 +37,36 @@ spec:
             args:
               - |
                 set -e
-                # With flattened export, model is at /mnt/models/model.pkl
+                export MODEL_MOUNT_DIR="${MODEL_MOUNT_DIR:-/mnt/models}"
+
+                echo "=== DEBUG: initial mount ==="
+                ls -l "$MODEL_MOUNT_DIR" || true
+
+                # Descend through up to TWO wrapper directories if there's exactly one entry each time
+                for i in 1 2; do
+                  if [ -d "$MODEL_MOUNT_DIR" ]; then
+                    cnt="$(ls -1 "$MODEL_MOUNT_DIR" 2>/dev/null | wc -l | tr -d ' ')"
+                    if [ "$cnt" = "1" ]; then
+                      only="$(ls -1 "$MODEL_MOUNT_DIR" 2>/dev/null)"
+                      if [ -d "$MODEL_MOUNT_DIR/$only" ]; then
+                        MODEL_MOUNT_DIR="$MODEL_MOUNT_DIR/$only"
+                        echo "=== DEBUG: descended to: $MODEL_MOUNT_DIR"
+                        continue
+                      fi
+                    fi
+                  fi
+                  break
+                done
+
+                # Normalize artifact-named file -> model.pkl
+                if [ -f "$MODEL_MOUNT_DIR/cpiflowmodel" ] && [ ! -f "$MODEL_MOUNT_DIR/model.pkl" ]; then
+                  cp "$MODEL_MOUNT_DIR/cpiflowmodel" "$MODEL_MOUNT_DIR/model.pkl"
+                  echo "=== DEBUG: normalized cpiflowmodel -> model.pkl"
+                fi
+
+                echo "=== DEBUG: final model dir ==="
+                ls -l "$MODEL_MOUNT_DIR" || true
+
                 exec uvicorn --app-dir /app/src serve_cpiflow_kserve:app \
                   --host 0.0.0.0 --port ${PORT:-8080}
             env:
