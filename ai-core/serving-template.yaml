@@ -4,13 +4,13 @@ metadata:
   name: cpiflow-serving-pipeline
   annotations:
     scenarios.ai.sap.com/name: "CPIFLOW Optimizer PRO"
-    scenarios.ai.sap.com/description: "FastAPI on KServe"
-    executables.ai.sap.com/name: "cpiflow-model-serving"        # ✅ DNS-label style, no spaces
-    executables.ai.sap.com/description: "CPI classifier API"
+    scenarios.ai.sap.com/description: "Serving CPIFLOW classifier via KServe"
+    executables.ai.sap.com/name: "cpiflow-model-serving"      # must be DNS-label (lowercase, dashes)
+    executables.ai.sap.com/description: "FastAPI server for CPIFLOW classifier"
     artifacts.ai.sap.com/cpiflowmodel.kind: "model"
   labels:
     scenarios.ai.sap.com/id: "cpiflow-optimizer-pro"
-    ai.sap.com/version: "7.3"
+    ai.sap.com/version: "7.5"  # bump to force new Revision
 spec:
   inputs:
     artifacts:
@@ -33,27 +33,14 @@ spec:
         containers:
         - name: kserve-container
           image: docker.io/balakalyandocker/cpiflow-serve:py312-v1
+          ports:
+            - containerPort: 8080
+              protocol: TCP
           command: ["/bin/sh","-c"]
           args:
             - >
               set -e &&
-              # descend up to 3 wrapper dirs (e.g., aicoretutorial/<hash>/app/model)
-              export MODEL_MOUNT_DIR="${MODEL_MOUNT_DIR:-/mnt/models}" &&
-              for i in 1 2 3; do
-                if [ -d "$MODEL_MOUNT_DIR" ]; then
-                  c="$(ls -1 "$MODEL_MOUNT_DIR" | wc -l | tr -d ' ')" ;
-                  if [ "$c" = "1" ]; then
-                    o="$(ls -1 "$MODEL_MOUNT_DIR")" ;
-                    [ -d "$MODEL_MOUNT_DIR/$o" ] && MODEL_MOUNT_DIR="$MODEL_MOUNT_DIR/$o" && continue ;
-                  fi ;
-                fi ; break ;
-              done &&
-              uvicorn --app-dir /app/src serve_cpiflow_kserve:app --host 0.0.0.0 --port ${PORT:-8080}
+              uvicorn --app-dir /app/src serve_cpiflow_kserve:app --host 0.0.0.0 --port 8080
           env:
             - name: STORAGE_URI
               value: "{{inputs.artifacts.cpiflowmodel}}"
-            - name: MODEL_MOUNT_DIR
-              value: "/mnt/models"
-          ports:
-            - containerPort: 8080
-              protocol: TCP
