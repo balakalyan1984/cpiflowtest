@@ -11,13 +11,9 @@ metadata:
     artifacts.ai.sap.com/cpiflowmodel.kind: "model"
   labels:
     scenarios.ai.sap.com/id: "cpiflow-optimizer-pro"
-    ai.sap.com/version: "6.10"
+    ai.sap.com/version: "7.0"
 spec:
-  imagePullSecrets:
-    - name: milton-credentials
-
-  entrypoint: mypipeline
-
+  entrypoint: main
   arguments:
     parameters:
       - name: TARGET_COLUMN
@@ -26,14 +22,12 @@ spec:
         value: "cpi_logs_500.csv"
       - name: TRAINER
         value: "LR"
-
   templates:
-    - name: mypipeline
+    - name: main
       inputs:
         artifacts:
           - name: cpiflowdataset
             path: /app/data
-
       container:
         image: docker.io/balakalyandocker/cpiflow-train:py312-v1
         imagePullPolicy: IfNotPresent
@@ -52,42 +46,16 @@ spec:
         args:
           - |
             set -euo pipefail
-            echo '--- /app ---'; ls -la /app || true
-            echo '--- /app/src ---'; ls -la /app/src || true
-            echo '--- /app/data ---'; ls -la /app/data || true
-
             mkdir -p /app/model
-
-            # Auto-detect CSV if declared DATA_PATH is missing
             if [ ! -f "$DATA_PATH" ]; then
-              echo "WARN: $DATA_PATH not found. Auto-detecting CSV under /app/data"
               DATA_PATH="$(ls -1 /app/data/*.csv 2>/dev/null | head -n1 || true)"
               [ -z "$DATA_PATH" ] && { echo "ERROR: No CSV under /app/data"; exit 2; }
-              echo "Using DATA_PATH=$DATA_PATH"
               export DATA_PATH
             fi
-
-            # Train (image provides the script)
             python /app/src/train_cpi_pipeline.py
-
-            echo '--- /app/model ---'; ls -la /app/model || true
             [ -f /app/model/model.pkl ] || { echo "ERROR: model.pkl missing"; exit 2; }
-
-            # Optional companions (ensure they exist)
-            [ -f /app/model/metrics.json ] || printf '{}' > /app/model/metrics.json
-            [ -f /app/model/cpilog_artifact_insights.csv ] || printf 'artifact,metric,value\n' > /app/model/cpilog_artifact_insights.csv
-            [ -f /app/model/cpilog_hotspots.csv ] || printf 'field,score\n' > /app/model/cpilog_hotspots.csv
-            [ -f /app/model/cpilog_insights_report.md ] || printf '# CPI Insights (empty)\n' > /app/model/cpilog_insights_report.md
-
-            # FLAT EXPORT (writable path) → serving sees /mnt/models/model.pkl at root
             mkdir -p /app/export
             cp -v /app/model/model.pkl /app/export/model.pkl
-            # (optional) expose companions at artifact root:
-            # cp -v /app/model/metrics.json /app/export/metrics.json
-            # cp -v /app/model/cpilog_hotspots.csv /app/export/cpilog_hotspots.csv
-            # cp -v /app/model/cpilog_artifact_insights.csv /app/export/cpilog_artifact_insights.csv
-            # cp -v /app/model/cpilog_insights_report.md /app/export/cpilog_insights_report.md
-
       outputs:
         artifacts:
           - name: cpiflowmodel
