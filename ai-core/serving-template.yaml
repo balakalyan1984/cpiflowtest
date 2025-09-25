@@ -2,25 +2,31 @@ apiVersion: ai.sap.com/v1alpha1
 kind: ServingTemplate
 metadata:
   name: cpiflow-serving-pipeline
+  annotations:
+    scenarios.ai.sap.com/name: "CPIFLOW Optimizer PRO"
+    scenarios.ai.sap.com/description: "FastAPI on KServe"
+    executables.ai.sap.com/name: "cpiflow-model-serving"             # REQUIRED
+    executables.ai.sap.com/description: "All-in-one CPI classifier API"
+    artifacts.ai.sap.com/cpiflowmodel.kind: "model"                  # declares the expected artifact kind
   labels:
     scenarios.ai.sap.com/id: "cpiflow-optimizer-pro"
-    ai.sap.com/version: "6.4"     # bump to force new Revision
+    ai.sap.com/version: "6.5"                                        # bump to force a new Revision
 spec:
   inputs:
     artifacts:
       - name: cpiflowmodel
   template:
-    apiVersion: "serving.kserve.io/v1beta1"
+    apiVersion: serving.kserve.io/v1beta1
     kind: InferenceService
     metadata:
       name: cpiflow-serving
-      annotations: |-
+      annotations:
         autoscaling.knative.dev/metric: concurrency
         autoscaling.knative.dev/target: "1"
         autoscaling.knative.dev/targetBurstCapacity: "0"
-      labels: |-
+      labels:
         ai.sap.com/resourcePlan: starter
-    spec: |-
+    spec:
       predictor:
         minReplicas: 1
         maxReplicas: 2
@@ -32,31 +38,19 @@ spec:
               - |
                 set -e
                 export MODEL_MOUNT_DIR="${MODEL_MOUNT_DIR:-/mnt/models}"
-                echo "=== DEBUG: initial MODEL_MOUNT_DIR=$MODEL_MOUNT_DIR"
-                ls -lR "$MODEL_MOUNT_DIR" || true
-
-                # descend through up to THREE single-child directories
+                # descend through up to THREE single-child directories (tolerate wrappers)
                 for i in 1 2 3; do
                   if [ -d "$MODEL_MOUNT_DIR" ]; then
                     cnt="$(ls -1 "$MODEL_MOUNT_DIR" | wc -l | tr -d ' ')"
                     if [ "$cnt" = "1" ]; then
                       only="$(ls -1 "$MODEL_MOUNT_DIR")"
-                      if [ -d "$MODEL_MOUNT_DIR/$only" ]; then
-                        MODEL_MOUNT_DIR="$MODEL_MOUNT_DIR/$only"
-                        continue
-                      fi
+                      [ -d "$MODEL_MOUNT_DIR/$only" ] && MODEL_MOUNT_DIR="$MODEL_MOUNT_DIR/$only" && continue
                     fi
                   fi
                   break
                 done
-
-                # some servers also honor MODEL_PATH; set it to the likely file
                 export MODEL_PATH="$MODEL_MOUNT_DIR/model.pkl"
-                echo "=== DEBUG: USING MODEL_MOUNT_DIR=$MODEL_MOUNT_DIR"
-                ls -l "$MODEL_MOUNT_DIR" || true
-
-                exec uvicorn --app-dir /app/src serve_cpiflow_kserve:app \
-                  --host 0.0.0.0 --port ${PORT:-8080}
+                exec uvicorn --app-dir /app/src serve_cpiflow_kserve:app --host 0.0.0.0 --port ${PORT:-8080}
             env:
               - name: STORAGE_URI
                 value: "{{inputs.artifacts.cpiflowmodel}}"
@@ -73,9 +67,4 @@ spec:
               initialDelaySeconds: 2
               periodSeconds: 5
             resources:
-              requests:
-                cpu: "100m"
-                memory: "256Mi"
-              limits:
-                cpu: "1"
-                memory: "1Gi"
+              reque
