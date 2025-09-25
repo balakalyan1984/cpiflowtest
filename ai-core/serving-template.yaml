@@ -1,9 +1,10 @@
+# cpiflow-serving-pipeline.yaml
 apiVersion: ai.sap.com/v1alpha1
 kind: ServingTemplate
 metadata:
   name: cpiflow-serving-pipeline
   annotations:
-    executables.ai.sap.com/name: "cpiflow-model-serving"          # REQUIRED (map, not string)
+    executables.ai.sap.com/name: "cpiflow-model-serving"      # REQUIRED (top-level map)
     executables.ai.sap.com/description: "CPI classifier API"
     scenarios.ai.sap.com/name: "CPIFLOW Optimizer PRO"
     scenarios.ai.sap.com/description: "FastAPI on KServe"
@@ -20,8 +21,9 @@ spec:
     kind: InferenceService
     metadata:
       name: cpiflow-serving
-      annotations: "{}"                               # MUST be string
-      labels: "{\"ai.sap.com/resourcePlan\":\"starter\"}"   # MUST be string
+      # INNER fields MUST be strings; using JSON strings avoids type errors.
+      annotations: "{}"
+      labels: "{\"ai.sap.com/resourcePlan\":\"starter\"}"
     spec: |-
       predictor:
         minReplicas: 1
