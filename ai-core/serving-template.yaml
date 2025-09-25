@@ -5,7 +5,7 @@ metadata:
   annotations:
     scenarios.ai.sap.com/name: "CPIFLOW Optimizer PRO"
     scenarios.ai.sap.com/description: "FastAPI on KServe"
-    executables.ai.sap.com/name: "CPIFLOW model serving"
+    executables.ai.sap.com/name: "cpiflow-model-serving"        # ✅ DNS-label style, no spaces
     executables.ai.sap.com/description: "CPI classifier API"
     artifacts.ai.sap.com/cpiflowmodel.kind: "model"
   labels:
@@ -37,7 +37,7 @@ spec:
           args:
             - >
               set -e &&
-              # walk through up to 3 wrapper dirs (e.g., aicoretutorial/<hash>/app/model)
+              # descend up to 3 wrapper dirs (e.g., aicoretutorial/<hash>/app/model)
               export MODEL_MOUNT_DIR="${MODEL_MOUNT_DIR:-/mnt/models}" &&
               for i in 1 2 3; do
                 if [ -d "$MODEL_MOUNT_DIR" ]; then
