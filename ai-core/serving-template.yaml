@@ -1,3 +1,6 @@
+# =======================
+# SERVING SERVINGTEMPLATE
+# =======================
 apiVersion: ai.sap.com/v1alpha1
 kind: ServingTemplate
 metadata:
@@ -7,10 +10,10 @@ metadata:
     executables.ai.sap.com/description: "All-in-one CPI classifier API"
     scenarios.ai.sap.com/name: "CPIFLOW Optimizer PRO"
     scenarios.ai.sap.com/description: "FastAPI on KServe"
-    artifacts.ai.sap.com/cpiflowmodel.kind: "model"                 # declare input artifact kind
+    artifacts.ai.sap.com/cpiflowmodel.kind: "model"                 # declares expected input artifact kind
   labels:
     scenarios.ai.sap.com/id: "cpiflow-optimizer-pro"
-    ai.sap.com/version: "6.9"                                       # bump to force new Revision
+    ai.sap.com/version: "6.10"                                      # bump to force new Revision
 spec:
   inputs:
     artifacts:
@@ -20,11 +23,10 @@ spec:
     kind: InferenceService
     metadata:
       name: cpiflow-serving
-      # *** MUST BE STRING ***
+      # Inner annotations/labels must be STRINGs for the validator. Use JSON to avoid YAML type issues.
       annotations: "{\"autoscaling.knative.dev/metric\":\"concurrency\",\"autoscaling.knative.dev/target\":\"1\",\"autoscaling.knative.dev/targetBurstCapacity\":\"0\"}"
-      # *** MUST BE STRING ***
       labels: "{\"ai.sap.com/resourcePlan\":\"starter\"}"
-    # *** MUST BE STRING ***
+    # spec must also be a STRING; using a block string is OK
     spec: |
       predictor:
         minReplicas: 1
@@ -37,7 +39,11 @@ spec:
               - |
                 set -e
                 export MODEL_MOUNT_DIR="${MODEL_MOUNT_DIR:-/mnt/models}"
-                # tolerate up to 3 wrapper levels (aicoretutorial/<hash>/app/model)
+
+                echo "=== DEBUG: initial /mnt/models tree"
+                ls -lR "$MODEL_MOUNT_DIR" || true
+
+                # descend up to 3 single-child wrapper folders (aicoretutorial/<hash>/app/model)
                 for i in 1 2 3; do
                   if [ -d "$MODEL_MOUNT_DIR" ]; then
                     c="$(ls -1 "$MODEL_MOUNT_DIR" | wc -l | tr -d ' ')"
@@ -48,7 +54,30 @@ spec:
                   fi
                   break
                 done
-                export MODEL_PATH="$MODEL_MOUNT_DIR/model.pkl"
+                echo "=== DEBUG: USING MODEL_MOUNT_DIR=$MODEL_MOUNT_DIR"
+                ls -l "$MODEL_MOUNT_DIR" || true
+
+                # Preflight: verify the file is a real pickle
+                python - <<'PY'
+import os, sys, binascii, traceback
+root = os.environ.get("MODEL_MOUNT_DIR","/mnt/models")
+cands = [os.path.join(root, "model.pkl"), os.path.join(root, "pipeline.pkl")]
+print("Candidates:", cands)
+exist = [p for p in cands if os.path.exists(p)]
+print("Existing:", exist)
+if not exist:
+    print("ERROR: No model file at", root); sys.exit(2)
+p = exist[0]
+try:
+    sz = os.stat(p).st_size
+    with open(p,'rb') as f: head = f.read(16)
+    print("Picked:", p, "size:", sz, "bytes head:", binascii.hexlify(head).decode())
+    import joblib; _ = joblib.load(p)
+    print("SUCCESS: joblib.load OK")
+except Exception as e:
+    print("LOAD ERROR:", repr(e)); traceback.print_exc(); sys.exit(3)
+PY
+
                 exec uvicorn --app-dir /app/src serve_cpiflow_kserve:app --host 0.0.0.0 --port ${PORT:-8080}
             env:
               - name: STORAGE_URI
