@@ -1,3 +1,4 @@
+# cpiflow-training-pipeline.yaml
 apiVersion: argoproj.io/v1alpha1
 kind: WorkflowTemplate
 metadata:
@@ -5,13 +6,13 @@ metadata:
   annotations:
     scenarios.ai.sap.com/name: "CPIFLOW Optimizer"
     scenarios.ai.sap.com/description: "Train CPI log classifier"
-    executables.ai.sap.com/name: "CPIFLOW model training"
+    executables.ai.sap.com/name: "cpiflow-model-training"
     executables.ai.sap.com/description: "Produces single model.pkl for serving"
     artifacts.ai.sap.com/cpiflowdataset.kind: "dataset"
     artifacts.ai.sap.com/cpiflowmodel.kind: "model"
   labels:
     scenarios.ai.sap.com/id: "cpiflow-optimizer-pro"
-    ai.sap.com/version: "7.2"
+    ai.sap.com/version: "8.0"
 spec:
   imagePullSecrets:
     - name: milton-credentials
@@ -29,14 +30,14 @@ spec:
       inputs:
         artifacts:
           - name: cpiflowdataset
-            path: /app/data            # directory mount (no trailing slash)
+            path: /app/data                 # directory mount
       outputs:
         artifacts:
           - name: cpiflowmodel
             globalName: cpiflowmodel
-            path: /app/model/model.pkl # single file → no .tgz
+            path: /app/model/model.pkl      # ⬅️ single file (no directory)
             archive:
-              none: {}
+              none: {}                      # ⬅️ prevent .tgz wrapping
       container:
         image: docker.io/balakalyandocker/cpiflow-train:py312-v1
         imagePullPolicy: IfNotPresent
@@ -62,7 +63,6 @@ spec:
               export DATA_PATH;
             fi;
             echo '--- /app/data ---'; ls -la /app/data || true;
-            echo '--- /app/model (before) ---'; ls -la /app/model || true;
             python /app/src/train_cpi_pipeline.py;
             [ -f /app/model/model.pkl ] || { echo "ERROR: model.pkl missing"; exit 2; };
             echo '--- /app/model (after) ---'; ls -la /app/model || true;
