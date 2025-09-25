@@ -3,14 +3,14 @@ kind: ServingTemplate
 metadata:
   name: cpiflow-serving-pipeline
   annotations:
+    executables.ai.sap.com/name: "cpiflow-model-serving"            # REQUIRED
+    executables.ai.sap.com/description: "All-in-one CPI classifier API"
     scenarios.ai.sap.com/name: "CPIFLOW Optimizer PRO"
     scenarios.ai.sap.com/description: "FastAPI on KServe"
-    executables.ai.sap.com/name: "cpiflow-model-serving"              # REQUIRED
-    executables.ai.sap.com/description: "All-in-one CPI classifier API"
-    artifacts.ai.sap.com/cpiflowmodel.kind: "model"                   # declare input artifact kind
+    artifacts.ai.sap.com/cpiflowmodel.kind: "model"                 # declares input artifact kind
   labels:
     scenarios.ai.sap.com/id: "cpiflow-optimizer-pro"
-    ai.sap.com/version: "6.6"                                         # bump to force new Revision
+    ai.sap.com/version: "6.7"                                       # bump to force a new Revision
 spec:
   inputs:
     artifacts:
@@ -38,7 +38,7 @@ spec:
               - |
                 set -e
                 export MODEL_MOUNT_DIR="${MODEL_MOUNT_DIR:-/mnt/models}"
-                # optional: auto-descend wrappers up to 3 levels
+                # optional: auto-descend single-child wrapper folders up to 3 levels
                 for i in 1 2 3; do
                   if [ -d "$MODEL_MOUNT_DIR" ]; then
                     c="$(ls -1 "$MODEL_MOUNT_DIR" | wc -l | tr -d ' ')"
@@ -59,6 +59,7 @@ spec:
             ports:
               - name: http1
                 containerPort: 8080
+                protocol: TCP
             readinessProbe:
               httpGet:
                 path: /health
