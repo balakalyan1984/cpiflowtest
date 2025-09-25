@@ -1,3 +1,4 @@
+# cpiflow-serving-pipeline.yaml
 apiVersion: ai.sap.com/v1alpha1
 kind: ServingTemplate
 metadata:
@@ -5,12 +6,12 @@ metadata:
   annotations:
     scenarios.ai.sap.com/name: "CPIFLOW Optimizer PRO"
     scenarios.ai.sap.com/description: "Serving CPIFLOW classifier via KServe"
-    executables.ai.sap.com/name: "cpiflow-model-serving"
+    executables.ai.sap.com/name: "cpiflow-model-serving"       # DNS-label (no spaces)
     executables.ai.sap.com/description: "FastAPI server for CPIFLOW classifier"
     artifacts.ai.sap.com/cpiflowmodel.kind: "model"
   labels:
     scenarios.ai.sap.com/id: "cpiflow-optimizer-pro"
-    ai.sap.com/version: "7.6"                # bump to force NEW Knative Revision
+    ai.sap.com/version: "8.0"                                   # bump to force new Revision
 spec:
   inputs:
     artifacts:
@@ -26,7 +27,6 @@ spec:
         ai.sap.com/resourcePlan: starter
     spec: |
       predictor:
-        # If your image is private, keep this. If it's public, you can remove.
         imagePullSecrets:
           - name: milton-credentials
         minReplicas: 1
@@ -35,7 +35,6 @@ spec:
         - name: kserve-container
           image: docker.io/balakalyandocker/cpiflow-serve:py312-v1
           imagePullPolicy: Always
-          # Name the port "http1" so Knative/Istio detect it cleanly
           ports:
             - name: http1
               containerPort: 8080
@@ -48,28 +47,6 @@ spec:
               --host 0.0.0.0 --port ${PORT:-8080}
           env:
             - name: STORAGE_URI
-              value: "{{inputs.artifacts.cpiflowmodel}}"
-            # Knative injects PORT. We still default to 8080 for local parity.
+              value: "{{inputs.artifacts.cpiflowmodel}}"        # mounts to /mnt/models
             - name: MODEL_MOUNT_DIR
               value: "/mnt/models"
-          readinessProbe:
-            httpGet:
-              path: /health
-              port: 8080
-            initialDelaySeconds: 2
-            periodSeconds: 5
-            failureThreshold: 12
-          livenessProbe:
-            httpGet:
-              path: /health
-              port: 8080
-            initialDelaySeconds: 10
-            periodSeconds: 10
-            failureThreshold: 6
-          resources:
-            requests:
-              cpu: "100m"
-              memory: "256Mi"
-            limits:
-              cpu: "1"
-              memory: "1Gi"
