@@ -5,7 +5,7 @@ metadata:
   annotations:
     scenarios.ai.sap.com/name: "CPIFLOW Optimizer PRO"
     scenarios.ai.sap.com/description: "FastAPI on KServe"
-    executables.ai.sap.com/name: "CPIFLOW model serving"      # REQUIRED
+    executables.ai.sap.com/name: "CPIFLOW model serving"
     executables.ai.sap.com/description: "CPI classifier API"
     artifacts.ai.sap.com/cpiflowmodel.kind: "model"
   labels:
@@ -17,68 +17,43 @@ spec:
       - name: cpiflowmodel
   template:
     apiVersion: "serving.kserve.io/v1beta1"
-    kind: InferenceService
     metadata:
-      name: cpiflow-serving
-      # inner fields MUST be strings for the validator; JSON strings are safest
-      annotations: "{}"
-      labels: "{\"ai.sap.com/resourcePlan\":\"starter\"}"
-    spec: |-
+      annotations: |
+        autoscaling.knative.dev/metric: concurrency
+        autoscaling.knative.dev/target: 1
+        autoscaling.knative.dev/targetBurstCapacity: 0
+      labels: |
+        ai.sap.com/resourcePlan: starter
+    spec: |
       predictor:
+        imagePullSecrets:
+          - name: milton-credentials
         minReplicas: 1
         maxReplicas: 2
         containers:
-          - name: kserve-container
-            image: docker.io/balakalyandocker/cpiflow-serve:py312-v1
-            command: ["/bin/sh","-lc"]
-            args:
-              - |
-                set -e
-                export MODEL_MOUNT_DIR="${MODEL_MOUNT_DIR:-/mnt/models}"
-                # tolerate up to 3 wrapper dirs (e.g., aicoretutorial/<hash>/app/model)
-                for i in 1 2 3; do
-                  if [ -d "$MODEL_MOUNT_DIR" ]; then
-                    c="$(ls -1 "$MODEL_MOUNT_DIR" | wc -l | tr -d ' ')"
-                    if [ "$c" = "1" ]; then
-                      o="$(ls -1 "$MODEL_MOUNT_DIR")"
-                      [ -d "$MODEL_MOUNT_DIR/$o" ] && MODEL_MOUNT_DIR="$MODEL_MOUNT_DIR/$o" && continue
-                    fi
-                  fi
-                  break
-                done
-                # Preflight: ensure the file is a real pickle before starting
-                python - <<'PY'
-import os, sys, joblib
-root=os.environ.get("MODEL_MOUNT_DIR","/mnt/models")
-for name in ("model.pkl","pipeline.pkl"):
-  p=os.path.join(root,name)
-  if os.path.exists(p):
-    try:
-      joblib.load(p); print("OK:",p); break
-    except Exception as e:
-      print("LOAD-ERR:",p,repr(e)); sys.exit(3)
-else:
-  print("NO-MODEL-FILE at",root); sys.exit(2)
-PY
-                exec uvicorn --app-dir /app/src serve_cpiflow_kserve:app --host 0.0.0.0 --port ${PORT:-8080}
-            env:
-              - name: STORAGE_URI
-                value: "{{inputs.artifacts.cpiflowmodel}}"
-              - name: MODEL_MOUNT_DIR
-                value: "/mnt/models"
-            ports:
-              - name: http1
-                containerPort: 8080
-            readinessProbe:
-              httpGet:
-                path: /health
-                port: 8080
-              initialDelaySeconds: 2
-              periodSeconds: 5
-            resources:
-              requests:
-                cpu: "100m"
-                memory: "256Mi"
-              limits:
-                cpu: "1"
-                memory: "1Gi"
+        - name: kserve-container
+          image: docker.io/balakalyandocker/cpiflow-serve:py312-v1
+          command: ["/bin/sh","-c"]
+          args:
+            - >
+              set -e &&
+              # walk through up to 3 wrapper dirs (e.g., aicoretutorial/<hash>/app/model)
+              export MODEL_MOUNT_DIR="${MODEL_MOUNT_DIR:-/mnt/models}" &&
+              for i in 1 2 3; do
+                if [ -d "$MODEL_MOUNT_DIR" ]; then
+                  c="$(ls -1 "$MODEL_MOUNT_DIR" | wc -l | tr -d ' ')" ;
+                  if [ "$c" = "1" ]; then
+                    o="$(ls -1 "$MODEL_MOUNT_DIR")" ;
+                    [ -d "$MODEL_MOUNT_DIR/$o" ] && MODEL_MOUNT_DIR="$MODEL_MOUNT_DIR/$o" && continue ;
+                  fi ;
+                fi ; break ;
+              done &&
+              uvicorn --app-dir /app/src serve_cpiflow_kserve:app --host 0.0.0.0 --port ${PORT:-8080}
+          env:
+            - name: STORAGE_URI
+              value: "{{inputs.artifacts.cpiflowmodel}}"
+            - name: MODEL_MOUNT_DIR
+              value: "/mnt/models"
+          ports:
+            - containerPort: 8080
+              protocol: TCP
