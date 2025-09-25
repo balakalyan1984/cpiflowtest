@@ -11,7 +11,7 @@ metadata:
     artifacts.ai.sap.com/cpiflowmodel.kind: "model"
   labels:
     scenarios.ai.sap.com/id: "cpiflow-optimizer-pro"
-    ai.sap.com/version: "7.0"
+    ai.sap.com/version: "7.1"
 spec:
   entrypoint: main
   arguments:
