@@ -5,12 +5,12 @@ metadata:
   annotations:
     scenarios.ai.sap.com/name: "CPIFLOW Optimizer PRO"
     scenarios.ai.sap.com/description: "FastAPI on KServe"
-    executables.ai.sap.com/name: "cpiflow-model-serving"             # REQUIRED
+    executables.ai.sap.com/name: "cpiflow-model-serving"              # REQUIRED
     executables.ai.sap.com/description: "All-in-one CPI classifier API"
-    artifacts.ai.sap.com/cpiflowmodel.kind: "model"                  # declares the expected artifact kind
+    artifacts.ai.sap.com/cpiflowmodel.kind: "model"                   # declare input artifact kind
   labels:
     scenarios.ai.sap.com/id: "cpiflow-optimizer-pro"
-    ai.sap.com/version: "6.5"                                        # bump to force a new Revision
+    ai.sap.com/version: "6.6"                                         # bump to force new Revision
 spec:
   inputs:
     artifacts:
@@ -38,13 +38,13 @@ spec:
               - |
                 set -e
                 export MODEL_MOUNT_DIR="${MODEL_MOUNT_DIR:-/mnt/models}"
-                # descend through up to THREE single-child directories (tolerate wrappers)
+                # optional: auto-descend wrappers up to 3 levels
                 for i in 1 2 3; do
                   if [ -d "$MODEL_MOUNT_DIR" ]; then
-                    cnt="$(ls -1 "$MODEL_MOUNT_DIR" | wc -l | tr -d ' ')"
-                    if [ "$cnt" = "1" ]; then
-                      only="$(ls -1 "$MODEL_MOUNT_DIR")"
-                      [ -d "$MODEL_MOUNT_DIR/$only" ] && MODEL_MOUNT_DIR="$MODEL_MOUNT_DIR/$only" && continue
+                    c="$(ls -1 "$MODEL_MOUNT_DIR" | wc -l | tr -d ' ')"
+                    if [ "$c" = "1" ]; then
+                      o="$(ls -1 "$MODEL_MOUNT_DIR")"
+                      [ -d "$MODEL_MOUNT_DIR/$o" ] && MODEL_MOUNT_DIR="$MODEL_MOUNT_DIR/$o" && continue
                     fi
                   fi
                   break
@@ -59,7 +59,6 @@ spec:
             ports:
               - name: http1
                 containerPort: 8080
-                protocol: TCP
             readinessProbe:
               httpGet:
                 path: /health
@@ -67,4 +66,9 @@ spec:
               initialDelaySeconds: 2
               periodSeconds: 5
             resources:
-              reque
+              requests:
+                cpu: "100m"
+                memory: "256Mi"
+              limits:
+                cpu: "1"
+                memory: "1Gi"
