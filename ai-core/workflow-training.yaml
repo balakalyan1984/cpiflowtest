@@ -6,12 +6,12 @@ metadata:
     scenarios.ai.sap.com/name: "CPIFLOW Optimizer"
     scenarios.ai.sap.com/description: "Train CPI log classifier"
     executables.ai.sap.com/name: "cpiflow-model-training"
-    executables.ai.sap.com/description: "Outputs model.pkl (+ optional reports)"
+    executables.ai.sap.com/description: "Produces model.pkl (flat) for serving"
     artifacts.ai.sap.com/cpiflowdataset.kind: "dataset"
     artifacts.ai.sap.com/cpiflowmodel.kind: "model"
   labels:
     scenarios.ai.sap.com/id: "cpiflow-optimizer-pro"
-    ai.sap.com/version: "6.1"   # bump to distinguish from older template
+    ai.sap.com/version: "6.2"
 spec:
   imagePullSecrets:
     - name: milton-credentials
@@ -25,7 +25,7 @@ spec:
       - name: DATA_FILE
         value: "cpi_logs_500.csv"
       - name: TRAINER
-        value: "LR"    # LR or SGD (if your trainer supports both)
+        value: "LR"   # LR or SGD if supported by your image
 
   templates:
     - name: mypipeline
@@ -58,7 +58,7 @@ spec:
 
             mkdir -p /app/model
 
-            # Auto-detect CSV if needed
+            # Auto-detect CSV if the declared DATA_PATH is missing
             if [ ! -f "$DATA_PATH" ]; then
               echo "WARN: $DATA_PATH not found. Auto-detecting CSV under /app/data"
               DATA_PATH="$(ls -1 /app/data/*.csv 2>/dev/null | head -n1 || true)"
@@ -67,33 +67,34 @@ spec:
               export DATA_PATH
             fi
 
-            # Train
+            # Train (your image provides this script)
             python /app/src/train_cpi_pipeline.py
 
             echo '--- /app/model ---'; ls -la /app/model || true
             [ -f /app/model/model.pkl ] || { echo "ERROR: model.pkl missing"; exit 2; }
 
-            # Optional side files (ensure exist so Argo can publish if desired)
+            # Ensure optional companions exist (so you can publish them later if desired)
             [ -f /app/model/metrics.json ] || printf '{}' > /app/model/metrics.json
             [ -f /app/model/cpilog_artifact_insights.csv ] || printf 'artifact,metric,value\n' > /app/model/cpilog_artifact_insights.csv
             [ -f /app/model/cpilog_hotspots.csv ] || printf 'field,score\n' > /app/model/cpilog_hotspots.csv
             [ -f /app/model/cpilog_insights_report.md ] || printf '# CPI Insights (empty)\n' > /app/model/cpilog_insights_report.md
 
-            # FLAT EXPORT (so serving sees /mnt/models/model.pkl at root)
-            mkdir -p /export
-            cp -v /app/model/model.pkl /export/model.pkl
-            # (optional) expose companions at top-level:
-            # cp -v /app/model/metrics.json /export/metrics.json
-            # cp -v /app/model/cpilog_hotspots.csv /export/cpilog_hotspots.csv
-            # cp -v /app/model/cpilog_artifact_insights.csv /export/cpilog_artifact_insights.csv
-            # cp -v /app/model/cpilog_insights_report.md /export/cpilog_insights_report.md
+            # FLAT EXPORT (writable path) → serving sees /mnt/models/model.pkl at root
+            mkdir -p /app/export
+            cp -v /app/model/model.pkl /app/export/model.pkl
+            # (optional) uncomment to surface companions at top-level of the model artifact
+            # cp -v /app/model/metrics.json /app/export/metrics.json
+            # cp -v /app/model/cpilog_hotspots.csv /app/export/cpilog_hotspots.csv
+            # cp -v /app/model/cpilog_artifact_insights.csv /app/export/cpilog_artifact_insights.csv
+            # cp -v /app/model/cpilog_insights_report.md /app/export/cpilog_insights_report.md
 
       outputs:
         artifacts:
           - name: cpiflowmodel
             globalName: cpiflowmodel
-            path: /export         # <= flat dir with model.pkl at root
-          # Uncomment any of these if you want separate artifacts in AI Core:
+            path: /app/export     # flat directory containing model.pkl
+            # archive: { none: {} }  # optional; omit to let AI Core manage extraction
+          # If you want separate outputs, uncomment any of these:
           # - name: cpiflowmetrics
           #   globalName: cpiflowmetrics
           #   path: /app/model/metrics.json
