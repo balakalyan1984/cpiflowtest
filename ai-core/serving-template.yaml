@@ -3,14 +3,14 @@ kind: ServingTemplate
 metadata:
   name: cpiflow-serving-pipeline
   annotations:
-    executables.ai.sap.com/name: "cpiflow-model-serving"          # REQUIRED at top-level
-    executables.ai.sap.com/description: "All-in-one CPI classifier API"
+    executables.ai.sap.com/name: "cpiflow-model-serving"          # REQUIRED (map, not string)
+    executables.ai.sap.com/description: "CPI classifier API"
     scenarios.ai.sap.com/name: "CPIFLOW Optimizer PRO"
     scenarios.ai.sap.com/description: "FastAPI on KServe"
     artifacts.ai.sap.com/cpiflowmodel.kind: "model"
   labels:
     scenarios.ai.sap.com/id: "cpiflow-optimizer-pro"
-    ai.sap.com/version: "7.0"                                     # bump to force new Revision
+    ai.sap.com/version: "7.1"
 spec:
   inputs:
     artifacts:
@@ -20,9 +20,8 @@ spec:
     kind: InferenceService
     metadata:
       name: cpiflow-serving
-      # INNER fields MUST be strings (not objects). Use JSON to be unambiguous.
-      annotations: "{}"
-      labels: "{\"ai.sap.com/resourcePlan\":\"starter\"}"
+      annotations: "{}"                               # MUST be string
+      labels: "{\"ai.sap.com/resourcePlan\":\"starter\"}"   # MUST be string
     spec: |-
       predictor:
         minReplicas: 1
@@ -35,7 +34,7 @@ spec:
               - |
                 set -e
                 export MODEL_MOUNT_DIR="${MODEL_MOUNT_DIR:-/mnt/models}"
-                # tolerate up to 3 single-child wrapper folders
+                # descend up to 3 single-child wrapper folders
                 for i in 1 2 3; do
                   if [ -d "$MODEL_MOUNT_DIR" ]; then
                     c="$(ls -1 "$MODEL_MOUNT_DIR" | wc -l | tr -d ' ')"
@@ -46,10 +45,10 @@ spec:
                   fi
                   break
                 done
-                # Preflight to fail clearly if the file isn't a real pickle
+                # quick preflight load to fail clearly if artifact is wrong type
                 python - <<'PY'
 import os, sys, joblib
-root = os.environ.get("MODEL_MOUNT_DIR","/mnt/models")
+root=os.environ.get("MODEL_MOUNT_DIR","/mnt/models")
 for name in ("model.pkl","pipeline.pkl"):
   p=os.path.join(root,name)
   if os.path.exists(p):
