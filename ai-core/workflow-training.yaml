@@ -4,16 +4,14 @@ metadata:
   name: cpiflow-training-pipeline
   annotations:
     scenarios.ai.sap.com/name: "CPIFLOW Optimizer"
-    scenarios.ai.sap.com/description: "Train CPI log classifier (LR/SGD) with drift baselines & insights"
+    scenarios.ai.sap.com/description: "Train CPI log classifier"
     executables.ai.sap.com/name: "cpiflow-model-training"
-    executables.ai.sap.com/description: "Outputs model.pkl + metrics + insights"
+    executables.ai.sap.com/description: "Outputs model.pkl (+ optional reports)"
     artifacts.ai.sap.com/cpiflowdataset.kind: "dataset"
     artifacts.ai.sap.com/cpiflowmodel.kind: "model"
-    artifacts.ai.sap.com/prevmodel.kind: "model"   # optional previous model (fine-tune)
   labels:
     scenarios.ai.sap.com/id: "cpiflow-optimizer-pro"
-    ai.sap.com/version: "6.0"
-
+    ai.sap.com/version: "6.1"   # bump to distinguish from older template
 spec:
   imagePullSecrets:
     - name: milton-credentials
@@ -27,9 +25,7 @@ spec:
       - name: DATA_FILE
         value: "cpi_logs_500.csv"
       - name: TRAINER
-        value: "LR"       # LR or SGD
-      - name: FINETUNE
-        value: "0"        # 1 to fine-tune if prev model is present
+        value: "LR"    # LR or SGD (if your trainer supports both)
 
   templates:
     - name: mypipeline
@@ -37,13 +33,10 @@ spec:
         artifacts:
           - name: cpiflowdataset
             path: /app/data
-          - name: prevmodel
-            path: /app/prev/prev_model.pkl
-            optional: true
 
       container:
         image: docker.io/balakalyandocker/cpiflow-train:py312-v1
-        imagePullPolicy: IfNotPresent     # consider: Always during dev
+        imagePullPolicy: IfNotPresent
         command: ["/bin/sh","-c"]
         env:
           - name: TARGET_COLUMN
@@ -56,18 +49,6 @@ spec:
             value: "/app/model/model.pkl"
           - name: TRAINER
             value: "{{workflow.parameters.TRAINER}}"
-          - name: FINETUNE_MODE
-            value: "{{workflow.parameters.FINETUNE}}"
-          - name: PREV_MODEL_PATH
-            value: "/app/prev/prev_model.pkl"
-        # Optional: add resources for better scheduling
-        # resources:
-        #   requests:
-        #     cpu: "500m"
-        #     memory: "1Gi"
-        #   limits:
-        #     cpu: "2"
-        #     memory: "4Gi"
         args:
           - |
             set -euo pipefail
@@ -77,59 +58,55 @@ spec:
 
             mkdir -p /app/model
 
-            # If DATA_PATH doesn't exist, auto-pick first CSV under /app/data
+            # Auto-detect CSV if needed
             if [ ! -f "$DATA_PATH" ]; then
               echo "WARN: $DATA_PATH not found. Auto-detecting CSV under /app/data"
               DATA_PATH="$(ls -1 /app/data/*.csv 2>/dev/null | head -n1 || true)"
-              if [ -z "$DATA_PATH" ]; then
-                echo "ERROR: No CSV found under /app/data"
-                exit 2
-              fi
+              [ -z "$DATA_PATH" ] && { echo "ERROR: No CSV under /app/data"; exit 2; }
               echo "Using DATA_PATH=$DATA_PATH"
               export DATA_PATH
             fi
 
-            # Disable finetune if prev model missing
-            if [ ! -f /app/prev/prev_model.pkl ]; then
-              export FINETUNE_MODE=0
-            fi
-
-            # Run training
+            # Train
             python /app/src/train_cpi_pipeline.py
 
             echo '--- /app/model ---'; ls -la /app/model || true
+            [ -f /app/model/model.pkl ] || { echo "ERROR: model.pkl missing"; exit 2; }
 
-            # Ensure required artifact exists
-            if [ ! -f /app/model/model.pkl ]; then
-              echo "ERROR: model.pkl missing"
-              exit 2
-            fi
-
-            # Create placeholders for optional outputs so Argo can upload them
+            # Optional side files (ensure exist so Argo can publish if desired)
             [ -f /app/model/metrics.json ] || printf '{}' > /app/model/metrics.json
             [ -f /app/model/cpilog_artifact_insights.csv ] || printf 'artifact,metric,value\n' > /app/model/cpilog_artifact_insights.csv
             [ -f /app/model/cpilog_hotspots.csv ] || printf 'field,score\n' > /app/model/cpilog_hotspots.csv
             [ -f /app/model/cpilog_insights_report.md ] || printf '# CPI Insights (empty)\n' > /app/model/cpilog_insights_report.md
 
+            # FLAT EXPORT (so serving sees /mnt/models/model.pkl at root)
+            mkdir -p /export
+            cp -v /app/model/model.pkl /export/model.pkl
+            # (optional) expose companions at top-level:
+            # cp -v /app/model/metrics.json /export/metrics.json
+            # cp -v /app/model/cpilog_hotspots.csv /export/cpilog_hotspots.csv
+            # cp -v /app/model/cpilog_artifact_insights.csv /export/cpilog_artifact_insights.csv
+            # cp -v /app/model/cpilog_insights_report.md /export/cpilog_insights_report.md
+
       outputs:
         artifacts:
           - name: cpiflowmodel
             globalName: cpiflowmodel
-            path: /app/model/model.pkl
-            archive: { none: {} }
-          - name: cpiflowmetrics
-            globalName: cpiflowmetrics
-            path: /app/model/metrics.json
-            archive: { none: {} }
-          - name: cpiflowinsights
-            globalName: cpiflowinsights
-            path: /app/model/cpilog_artifact_insights.csv
-            archive: { none: {} }
-          - name: cpiflowhotspots
-            globalName: cpiflowhotspots
-            path: /app/model/cpilog_hotspots.csv
-            archive: { none: {} }
-          - name: cpiflowreport
-            globalName: cpiflowreport
-            path: /app/model/cpilog_insights_report.md
-            archive: { none: {} }
+            path: /export         # <= flat dir with model.pkl at root
+          # Uncomment any of these if you want separate artifacts in AI Core:
+          # - name: cpiflowmetrics
+          #   globalName: cpiflowmetrics
+          #   path: /app/model/metrics.json
+          #   archive: { none: {} }
+          # - name: cpiflowinsights
+          #   globalName: cpiflowinsights
+          #   path: /app/model/cpilog_artifact_insights.csv
+          #   archive: { none: {} }
+          # - name: cpiflowhotspots
+          #   globalName: cpiflowhotspots
+          #   path: /app/model/cpilog_hotspots.csv
+          #   archive: { none: {} }
+          # - name: cpiflowreport
+          #   globalName: cpiflowreport
+          #   path: /app/model/cpilog_insights_report.md
+          #   archive: { none: {} }
