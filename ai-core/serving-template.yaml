@@ -2,15 +2,9 @@ apiVersion: ai.sap.com/v1alpha1
 kind: ServingTemplate
 metadata:
   name: cpiflow-serving-pipeline
-  annotations:
-    scenarios.ai.sap.com/name: "CPIFLOW Optimizer PRO"
-    scenarios.ai.sap.com/description: "FastAPI on KServe"
-    executables.ai.sap.com/name: "cpiflow-model-serving"
-    executables.ai.sap.com/description: "All-in-one CPI classifier API"
-    artifacts.ai.sap.com/cpiflowmodel.kind: "model"
   labels:
     scenarios.ai.sap.com/id: "cpiflow-optimizer-pro"
-    ai.sap.com/version: "6.5"   # bump to force a new Knative Revision
+    ai.sap.com/version: "6.4"     # bump to force new Revision
 spec:
   inputs:
     artifacts:
@@ -38,19 +32,17 @@ spec:
               - |
                 set -e
                 export MODEL_MOUNT_DIR="${MODEL_MOUNT_DIR:-/mnt/models}"
+                echo "=== DEBUG: initial MODEL_MOUNT_DIR=$MODEL_MOUNT_DIR"
+                ls -lR "$MODEL_MOUNT_DIR" || true
 
-                echo "=== DEBUG: initial mount ==="
-                ls -l "$MODEL_MOUNT_DIR" || true
-
-                # Descend through up to TWO wrapper directories if there's exactly one entry each time
-                for i in 1 2; do
+                # descend through up to THREE single-child directories
+                for i in 1 2 3; do
                   if [ -d "$MODEL_MOUNT_DIR" ]; then
-                    cnt="$(ls -1 "$MODEL_MOUNT_DIR" 2>/dev/null | wc -l | tr -d ' ')"
+                    cnt="$(ls -1 "$MODEL_MOUNT_DIR" | wc -l | tr -d ' ')"
                     if [ "$cnt" = "1" ]; then
-                      only="$(ls -1 "$MODEL_MOUNT_DIR" 2>/dev/null)"
+                      only="$(ls -1 "$MODEL_MOUNT_DIR")"
                       if [ -d "$MODEL_MOUNT_DIR/$only" ]; then
                         MODEL_MOUNT_DIR="$MODEL_MOUNT_DIR/$only"
-                        echo "=== DEBUG: descended to: $MODEL_MOUNT_DIR"
                         continue
                       fi
                     fi
@@ -58,13 +50,9 @@ spec:
                   break
                 done
 
-                # Normalize artifact-named file -> model.pkl
-                if [ -f "$MODEL_MOUNT_DIR/cpiflowmodel" ] && [ ! -f "$MODEL_MOUNT_DIR/model.pkl" ]; then
-                  cp "$MODEL_MOUNT_DIR/cpiflowmodel" "$MODEL_MOUNT_DIR/model.pkl"
-                  echo "=== DEBUG: normalized cpiflowmodel -> model.pkl"
-                fi
-
-                echo "=== DEBUG: final model dir ==="
+                # some servers also honor MODEL_PATH; set it to the likely file
+                export MODEL_PATH="$MODEL_MOUNT_DIR/model.pkl"
+                echo "=== DEBUG: USING MODEL_MOUNT_DIR=$MODEL_MOUNT_DIR"
                 ls -l "$MODEL_MOUNT_DIR" || true
 
                 exec uvicorn --app-dir /app/src serve_cpiflow_kserve:app \
@@ -74,8 +62,6 @@ spec:
                 value: "{{inputs.artifacts.cpiflowmodel}}"
               - name: MODEL_MOUNT_DIR
                 value: "/mnt/models"
-              - name: LABELS_DIR
-                value: "/mnt/labels"
             ports:
               - name: http1
                 containerPort: 8080
