@@ -1,17 +1,16 @@
-# cpiflow-serving-pipeline.yaml
 apiVersion: ai.sap.com/v1alpha1
 kind: ServingTemplate
 metadata:
   name: cpiflow-serving-pipeline
   annotations:
-    executables.ai.sap.com/name: "cpiflow-model-serving"      # REQUIRED (top-level map)
-    executables.ai.sap.com/description: "CPI classifier API"
     scenarios.ai.sap.com/name: "CPIFLOW Optimizer PRO"
     scenarios.ai.sap.com/description: "FastAPI on KServe"
+    executables.ai.sap.com/name: "CPIFLOW model serving"      # REQUIRED
+    executables.ai.sap.com/description: "CPI classifier API"
     artifacts.ai.sap.com/cpiflowmodel.kind: "model"
   labels:
     scenarios.ai.sap.com/id: "cpiflow-optimizer-pro"
-    ai.sap.com/version: "7.1"
+    ai.sap.com/version: "7.2"
 spec:
   inputs:
     artifacts:
@@ -21,7 +20,7 @@ spec:
     kind: InferenceService
     metadata:
       name: cpiflow-serving
-      # INNER fields MUST be strings; using JSON strings avoids type errors.
+      # inner fields MUST be strings for the validator; JSON strings are safest
       annotations: "{}"
       labels: "{\"ai.sap.com/resourcePlan\":\"starter\"}"
     spec: |-
@@ -36,7 +35,7 @@ spec:
               - |
                 set -e
                 export MODEL_MOUNT_DIR="${MODEL_MOUNT_DIR:-/mnt/models}"
-                # descend up to 3 single-child wrapper folders
+                # tolerate up to 3 wrapper dirs (e.g., aicoretutorial/<hash>/app/model)
                 for i in 1 2 3; do
                   if [ -d "$MODEL_MOUNT_DIR" ]; then
                     c="$(ls -1 "$MODEL_MOUNT_DIR" | wc -l | tr -d ' ')"
@@ -47,15 +46,17 @@ spec:
                   fi
                   break
                 done
-                # quick preflight load to fail clearly if artifact is wrong type
+                # Preflight: ensure the file is a real pickle before starting
                 python - <<'PY'
 import os, sys, joblib
 root=os.environ.get("MODEL_MOUNT_DIR","/mnt/models")
 for name in ("model.pkl","pipeline.pkl"):
   p=os.path.join(root,name)
   if os.path.exists(p):
-    try: joblib.load(p); print("OK:",p); break
-    except Exception as e: print("LOAD-ERR:",p,repr(e)); sys.exit(3)
+    try:
+      joblib.load(p); print("OK:",p); break
+    except Exception as e:
+      print("LOAD-ERR:",p,repr(e)); sys.exit(3)
 else:
   print("NO-MODEL-FILE at",root); sys.exit(2)
 PY
