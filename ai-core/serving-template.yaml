@@ -6,12 +6,12 @@ metadata:
   annotations:
     scenarios.ai.sap.com/name: "CPIFLOW Optimizer PRO"
     scenarios.ai.sap.com/description: "Serving CPIFLOW classifier via KServe"
-    executables.ai.sap.com/name: "cpiflow-model-serving"       # DNS-label (no spaces)
+    executables.ai.sap.com/name: "cpiflow-model-serving"          # dns-label; no spaces
     executables.ai.sap.com/description: "FastAPI server for CPIFLOW classifier"
     artifacts.ai.sap.com/cpiflowmodel.kind: "model"
   labels:
     scenarios.ai.sap.com/id: "cpiflow-optimizer-pro"
-    ai.sap.com/version: "8.0"                                   # bump to force new Revision
+    ai.sap.com/version: "9.1"                                      # bump to force new Revision
 spec:
   inputs:
     artifacts:
@@ -39,14 +39,50 @@ spec:
             - name: http1
               containerPort: 8080
               protocol: TCP
-          command: ["/bin/sh","-c"]
-          args:
-            - >
-              set -e &&
-              uvicorn --app-dir /app/src serve_cpiflow_kserve:app
-              --host 0.0.0.0 --port ${PORT:-8080}
+          command: ["/bin/sh","-lc"]
+          args: |
+            set -e
+            M="${MODEL_MOUNT_DIR:-/mnt/models}"
+
+            echo "== DEBUG: mounted at $M =="
+            ls -la "$M" || true
+
+            # Find model.pkl under wrapper dirs and symlink to /mnt/models/model.pkl
+            FOUND="$(python - <<'PY'
+import os
+root=os.environ.get("MODEL_MOUNT_DIR","/mnt/models")
+for base,_,files in os.walk(root):
+    if "model.pkl" in files:
+        print(os.path.join(base,"model.pkl")); break
+PY
+)"
+            [ -n "$FOUND" ] || { echo "ERROR: model.pkl not found under $M"; exit 2; }
+            echo "Found model at: $FOUND"
+            ln -sf "$FOUND" "$M/model.pkl"
+            ls -la "$M"
+
+            exec uvicorn --app-dir /app/src serve_cpiflow_kserve:app --host 0.0.0.0 --port ${PORT:-8080}
           env:
             - name: STORAGE_URI
-              value: "{{inputs.artifacts.cpiflowmodel}}"        # mounts to /mnt/models
+              value: "{{inputs.artifacts.cpiflowmodel}}"    # AI Core mounts this under /mnt/models
             - name: MODEL_MOUNT_DIR
               value: "/mnt/models"
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 2
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "1"
+              memory: "1Gi"
