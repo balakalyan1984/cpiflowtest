@@ -10,7 +10,7 @@ metadata:
     artifacts.ai.sap.com/cpiflowmodel.kind: "model"
   labels:
     scenarios.ai.sap.com/id: "cpiflow-optimizer-pro"
-    ai.sap.com/version: "10.1"            # bump to force a fresh Revision
+    ai.sap.com/version: "10.2"            # bump to force a fresh Revision
 spec:
   inputs:
     artifacts:
@@ -40,10 +40,10 @@ spec:
           args:
             - >
               set -e; M="${MODEL_MOUNT_DIR:-/mnt/models}"; echo "== DEBUG: mounted at $M =="; ls -la "$M" || true;
-              TGZ="$(find "$M" -type f -name model.pkl.tgz 2>/dev/null | head -n 1)";
+              TGZ="$(find "$M" -type f \( -name model.pkl.tgz -o -name cpiflowmodel.tgz -o -name '*.pkl.tgz' \) 2>/dev/null | head -n 1)";
               if [ -n "$TGZ" ]; then echo "Found tarball: $TGZ"; tar -xzf "$TGZ" -C "$(dirname "$TGZ")" || { echo "untar failed"; exit 2; }; fi;
-              FOUND="$(find "$M" -type f -name model.pkl 2>/dev/null | head -n 1)";
-              if [ -z "$FOUND" ]; then echo "ERROR: model.pkl not found under $M (listing below)"; find "$M" -maxdepth 6 -ls || true; exit 3; fi;
+              FOUND="$(find "$M" -type f \( -name model.pkl -o -name cpiflowmodel -o -name '*.pkl' -o -name '*.joblib' \) 2>/dev/null | head -n 1)";
+              if [ -z "$FOUND" ]; then echo "ERROR: model file not found under $M (listing below)"; find "$M" -maxdepth 6 -ls || true; exit 3; fi;
               echo "Resolved model at: $FOUND"; ln -sf "$FOUND" "$M/model.pkl"; ls -la "$M";
               exec uvicorn --app-dir /app/src serve_cpiflow_kserve:app --host 0.0.0.0 --port ${PORT:-8080}
           env:
