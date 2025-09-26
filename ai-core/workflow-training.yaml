@@ -1,4 +1,3 @@
-# cpiflow-training-pipeline.yaml
 apiVersion: argoproj.io/v1alpha1
 kind: WorkflowTemplate
 metadata:
@@ -12,10 +11,8 @@ metadata:
     artifacts.ai.sap.com/cpiflowmodel.kind: "model"
   labels:
     scenarios.ai.sap.com/id: "cpiflow-optimizer-pro"
-    ai.sap.com/version: "9.1"
+    ai.sap.com/version: "9.2"
 spec:
-  imagePullSecrets:
-    - name: milton-credentials
   entrypoint: mypipeline
   arguments:
     parameters:
@@ -30,17 +27,15 @@ spec:
       inputs:
         artifacts:
           - name: cpiflowdataset
-            path: /app/data                 # mount directory
+            path: /app/data
       outputs:
         artifacts:
           - name: cpiflowmodel
             globalName: cpiflowmodel
-            path: /app/model/model.pkl      # ⬅️ single file
-            archive:
-              none: {}                      # ⬅️ prevents .tgz wrapping
+            path: /app/model/model.pkl
+            archive: { none: {} }
       container:
         image: docker.io/balakalyandocker/cpiflow-train:py312-v1
-        imagePullPolicy: IfNotPresent
         command: ["/bin/sh","-c"]
         env:
           - name: TARGET_COLUMN
@@ -62,7 +57,5 @@ spec:
               [ -z "$DATA_PATH" ] && { echo "ERROR: No CSV under /app/data"; exit 2; };
               export DATA_PATH;
             fi;
-            echo '--- /app/data ---'; ls -la /app/data || true;
             python /app/src/train_cpi_pipeline.py;
             [ -f /app/model/model.pkl ] || { echo "ERROR: model.pkl missing"; exit 2; };
-            echo '--- /app/model (after) ---'; ls -la /app/model || true;
