@@ -10,7 +10,7 @@ metadata:
     artifacts.ai.sap.com/cpiflowmodel.kind: "model"
   labels:
     scenarios.ai.sap.com/id: "cpiflow-optimizer-pro"
-    ai.sap.com/version: "9.6"   # bump this to force a fresh Revision
+    ai.sap.com/version: "9.8"   # bump to force new Revision
 spec:
   inputs:
     artifacts:
@@ -42,7 +42,7 @@ spec:
             M="${MODEL_MOUNT_DIR:-/mnt/models}"
             echo "== DEBUG: mounted at $M =="; ls -la "$M" || true
 
-            # 1) If training uploaded a tarball, extract it once
+            # 1) If a tarball exists anywhere (model.pkl.tgz), extract it once
             TGZ="$(python - <<'PY'
 import os
 root=os.environ.get("MODEL_MOUNT_DIR","/mnt/models")
@@ -56,7 +56,7 @@ PY
               tar -xzf "$TGZ" -C "$(dirname "$TGZ")" || { echo "untar failed"; exit 2; }
             fi
 
-            # 2) Find model.pkl under wrapper dirs and symlink to /mnt/models/model.pkl
+            # 2) Find model.pkl under wrapper dirs and expose it at /mnt/models/model.pkl
             FOUND="$(python - <<'PY'
 import os
 root=os.environ.get("MODEL_MOUNT_DIR","/mnt/models")
@@ -70,7 +70,6 @@ PY
             ln -sf "$FOUND" "$M/model.pkl"
             ls -la "$M"
 
-            # 3) Start server
             exec uvicorn --app-dir /app/src serve_cpiflow_kserve:app --host 0.0.0.0 --port ${PORT:-8080}
           env:
           - name: STORAGE_URI
