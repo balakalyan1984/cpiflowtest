@@ -10,7 +10,7 @@ metadata:
     artifacts.ai.sap.com/cpiflowmodel.kind: "model"
   labels:
     scenarios.ai.sap.com/id: "cpiflow-optimizer-pro"
-    ai.sap.com/version: "10.3"            # bump to force a fresh Revision
+    ai.sap.com/version: "10.4"   # bump to force a fresh Revision
 spec:
   inputs:
     artifacts:
@@ -39,25 +39,16 @@ spec:
           command: ["/bin/sh","-c"]
           args:
             - >
-              set -e;
-              M="${MODEL_MOUNT_DIR:-/mnt/models}";
-              echo "== DEBUG: mounted at $M =="; ls -la "$M" || true;
+              set -e; M="${MODEL_MOUNT_DIR:-/mnt/models}"; echo "== DEBUG: mounted at $M =="; ls -la "$M" || true;
               TGZ="$(find "$M" -type f \( -name model.pkl.tgz -o -name cpiflowmodel.tgz -o -name '*.pkl.tgz' \) 2>/dev/null | head -n 1)";
               if [ -n "$TGZ" ]; then echo "Found tarball: $TGZ"; tar -xzf "$TGZ" -C "$(dirname "$TGZ")" || { echo "untar failed"; exit 2; }; fi;
               FOUND="$(find "$M" -type f \( -name model.pkl -o -name cpiflowmodel -o -name '*.pkl' -o -name '*.joblib' \) 2>/dev/null | head -n 1)";
               if [ -z "$FOUND" ]; then echo "ERROR: model file not found under $M (listing below)"; find "$M" -maxdepth 6 -ls || true; exit 3; fi;
               echo "Resolved model at: $FOUND";
-              TMP="/tmp/models"; mkdir -p "$TMP";
-              # Try symlink first; if read-only, copy to /tmp and point app there
-              if ln -sf "$FOUND" "$M/model.pkl" 2>/dev/null; then
-                echo "Symlinked to $M/model.pkl";
-                export MODEL_MOUNT_DIR="$M";
-              else
-                echo "Mount is read-only; copying to $TMP/model.pkl and using that";
-                cp -f "$FOUND" "$TMP/model.pkl";
-                export MODEL_MOUNT_DIR="$TMP";
-              fi;
-              ls -la "$MODEL_MOUNT_DIR";
+              ln -sf "$FOUND" "$M/model.pkl" 2>/dev/null && echo "Symlinked to $M/model.pkl" || true;
+              [ -e "$M/model.pkl" ] || { echo "Mount is read-only; copying to /tmp/models/model.pkl"; mkdir -p /tmp/models; cp -f "$FOUND" /tmp/models/model.pkl; export MODEL_MOUNT_DIR="/tmp/models"; };
+              [ -e "$M/model.pkl" ] && export MODEL_MOUNT_DIR="$M";
+              ls -la "${MODEL_MOUNT_DIR}";
               exec uvicorn --app-dir /app/src serve_cpiflow_kserve:app --host 0.0.0.0 --port ${PORT:-8080}
           env:
             - name: STORAGE_URI
