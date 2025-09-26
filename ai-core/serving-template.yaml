@@ -10,7 +10,7 @@ metadata:
     artifacts.ai.sap.com/cpiflowmodel.kind: "model"
   labels:
     scenarios.ai.sap.com/id: "cpiflow-optimizer-pro"
-    ai.sap.com/version: "9.8"   # bump to force new Revision
+    ai.sap.com/version: "10.0"     # bump to force a fresh revision
 spec:
   inputs:
     artifacts:
@@ -33,58 +33,29 @@ spec:
           image: docker.io/balakalyandocker/cpiflow-serve:py312-v1
           imagePullPolicy: Always
           ports:
-          - name: http1
-            containerPort: 8080
-            protocol: TCP
-          command: ["/bin/sh","-lc"]
-          args: |
-            set -e
-            M="${MODEL_MOUNT_DIR:-/mnt/models}"
-            echo "== DEBUG: mounted at $M =="; ls -la "$M" || true
-
-            # 1) If a tarball exists anywhere (model.pkl.tgz), extract it once
-            TGZ="$(python - <<'PY'
-import os
-root=os.environ.get("MODEL_MOUNT_DIR","/mnt/models")
-for b,_,f in os.walk(root):
-    if "model.pkl.tgz" in f:
-        print(os.path.join(b,"model.pkl.tgz")); break
-PY
-)"
-            if [ -n "$TGZ" ]; then
-              echo "Found tarball: $TGZ"
-              tar -xzf "$TGZ" -C "$(dirname "$TGZ")" || { echo "untar failed"; exit 2; }
-            fi
-
-            # 2) Find model.pkl under wrapper dirs and expose it at /mnt/models/model.pkl
-            FOUND="$(python - <<'PY'
-import os
-root=os.environ.get("MODEL_MOUNT_DIR","/mnt/models")
-for base,_,files in os.walk(root):
-    if "model.pkl" in files:
-        print(os.path.join(base,"model.pkl")); break
-PY
-)"
-            [ -n "$FOUND" ] || { echo "ERROR: model.pkl not found under $M"; exit 3; }
-            echo "Resolved model at: $FOUND"
-            ln -sf "$FOUND" "$M/model.pkl"
-            ls -la "$M"
-
-            exec uvicorn --app-dir /app/src serve_cpiflow_kserve:app --host 0.0.0.0 --port ${PORT:-8080}
+            - name: http1
+              containerPort: 8080
+              protocol: TCP
+          command: ["/bin/sh","-c"]
+          args:
+            - >
+              set -e; M="${MODEL_MOUNT_DIR:-/mnt/models}"; echo "== DEBUG: mounted at $M =="; ls -la "$M" || true;
+              TGZ="$(find "$M" -type f -name model.pkl.tgz -print -quit 2>/dev/null || true)";
+              if [ -n "$TGZ" ]; then echo "Found tarball: $TGZ"; tar -xzf "$TGZ" -C "$(dirname "$TGZ")" || { echo "untar failed"; exit 2; }; fi;
+              FOUND="$(find "$M" -type f -name model.pkl -print -quit 2>/dev/null || true)";
+              [ -n "$FOUND" ] || { echo "ERROR: model.pkl not found under $M"; exit 3; };
+              echo "Resolved model at: $FOUND"; ln -sf "$FOUND" "$M/model.pkl"; ls -la "$M";
+              exec uvicorn --app-dir /app/src serve_cpiflow_kserve:app --host 0.0.0.0 --port ${PORT:-8080}
           env:
-          - name: STORAGE_URI
-            value: "{{inputs.artifacts.cpiflowmodel}}"
-          - name: MODEL_MOUNT_DIR
-            value: "/mnt/models"
+            - name: STORAGE_URI
+              value: "{{inputs.artifacts.cpiflowmodel}}"
+            - name: MODEL_MOUNT_DIR
+              value: "/mnt/models"
           readinessProbe:
-            httpGet:
-              path: /health
-              port: 8080
+            httpGet: { path: /health, port: 8080 }
             initialDelaySeconds: 2
             periodSeconds: 5
           livenessProbe:
-            httpGet:
-              path: /health
-              port: 8080
+            httpGet: { path: /health, port: 8080 }
             initialDelaySeconds: 10
             periodSeconds: 10
