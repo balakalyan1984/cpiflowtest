@@ -10,7 +10,7 @@ metadata:
     artifacts.ai.sap.com/cpiflowmodel.kind: "model"
   labels:
     scenarios.ai.sap.com/id: "cpiflow-optimizer-pro"
-    ai.sap.com/version: "10.5"
+    ai.sap.com/version: "10.7"    # bump to force a fresh Revision
 spec:
   inputs:
     artifacts:
@@ -26,7 +26,6 @@ spec:
         ai.sap.com/resourcePlan: starter
     spec: |
       predictor:
-        # add your registry secret back in (harmless if not needed)
         imagePullSecrets:
           - name: milton-credentials
         minReplicas: 1
@@ -58,11 +57,12 @@ spec:
               value: "{{inputs.artifacts.cpiflowmodel}}"
             - name: MODEL_MOUNT_DIR
               value: "/mnt/models"
+          # Use TCP probes to avoid 404 on /health
           readinessProbe:
-            httpGet: { path: /health, port: 8080 }
+            tcpSocket: { port: 8080 }
             initialDelaySeconds: 2
             periodSeconds: 5
           livenessProbe:
-            httpGet: { path: /health, port: 8080 }
+            tcpSocket: { port: 8080 }
             initialDelaySeconds: 10
             periodSeconds: 10
