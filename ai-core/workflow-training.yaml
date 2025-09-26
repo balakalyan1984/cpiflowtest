@@ -12,7 +12,7 @@ metadata:
     artifacts.ai.sap.com/cpiflowmodel.kind: "model"
   labels:
     scenarios.ai.sap.com/id: "cpiflow-optimizer-pro"
-    ai.sap.com/version: "8.0"
+    ai.sap.com/version: "9.1"
 spec:
   imagePullSecrets:
     - name: milton-credentials
@@ -30,14 +30,14 @@ spec:
       inputs:
         artifacts:
           - name: cpiflowdataset
-            path: /app/data                 # directory mount
+            path: /app/data                 # mount directory
       outputs:
         artifacts:
           - name: cpiflowmodel
             globalName: cpiflowmodel
-            path: /app/model/model.pkl      # ⬅️ single file (no directory)
+            path: /app/model/model.pkl      # ⬅️ single file
             archive:
-              none: {}                      # ⬅️ prevent .tgz wrapping
+              none: {}                      # ⬅️ prevents .tgz wrapping
       container:
         image: docker.io/balakalyandocker/cpiflow-train:py312-v1
         imagePullPolicy: IfNotPresent
