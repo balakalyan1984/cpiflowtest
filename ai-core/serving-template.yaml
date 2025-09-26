@@ -10,7 +10,7 @@ metadata:
     artifacts.ai.sap.com/cpiflowmodel.kind: "model"
   labels:
     scenarios.ai.sap.com/id: "cpiflow-optimizer-pro"
-    ai.sap.com/version: "9.3"                 # bump to force a fresh Knative Revision
+    ai.sap.com/version: "9.4"     # bump to force a fresh Revision
 spec:
   inputs:
     artifacts:
@@ -29,66 +29,17 @@ spec:
         minReplicas: 1
         maxReplicas: 2
         containers:
-        - name: kserve-container
-          image: docker.io/balakalyandocker/cpiflow-serve:py312-v1
-          # name the port so Knative detects it as HTTP
-          ports:
-            - name: http1
-              containerPort: 8080
-              protocol: TCP
-          command: ["/bin/sh","-lc"]
-          # Robust bootstrap:
-          #  - if the artifact is a .tgz, unpack it
-          #  - if the artifact is nested under wrapper dirs, find model.pkl and symlink to /mnt/models/model.pkl
-          #  - then start uvicorn
-          args: |
-            set -e
-            M="${MODEL_MOUNT_DIR:-/mnt/models}"
-            echo "== DEBUG: mounted at $M =="; ls -la "$M" || true
-
-            # 1) If a tarball exists anywhere, extract it once
-            TGZ="$(python - <<'PY'
-import os
-root=os.environ.get("MODEL_MOUNT_DIR","/mnt/models")
-for b,_,f in os.walk(root):
-    if "model.pkl.tgz" in f:
-        print(os.path.join(b,"model.pkl.tgz")); break
-PY
-)"
-            if [ -n "$TGZ" ]; then
-              echo "Found tarball: $TGZ"
-              tar -xzf "$TGZ" -C "$(dirname "$TGZ")" || { echo "untar failed"; exit 2; }
-            fi
-
-            # 2) Find model.pkl under wrapper dirs and expose it at /mnt/models/model.pkl
-            FOUND="$(python - <<'PY'
-import os
-root=os.environ.get("MODEL_MOUNT_DIR","/mnt/models")
-for base,_,files in os.walk(root):
-    if "model.pkl" in files:
-        print(os.path.join(base,"model.pkl")); break
-PY
-)"
-            [ -n "$FOUND" ] || { echo "ERROR: model.pkl not found under $M"; exit 3; }
-            echo "Resolved model at: $FOUND"
-            ln -sf "$FOUND" "$M/model.pkl"
-            ls -la "$M"
-
-            exec uvicorn --app-dir /app/src serve_cpiflow_kserve:app --host 0.0.0.0 --port ${PORT:-8080}
-          env:
-            - name: STORAGE_URI
-              value: "{{inputs.artifacts.cpiflowmodel}}"
-            - name: MODEL_MOUNT_DIR
-              value: "/mnt/models"
-          readinessProbe:
-            httpGet:
-              path: /health
-              port: 8080
-            initialDelaySeconds: 2
-            periodSeconds: 5
-          livenessProbe:
-            httpGet:
-              path: /health
-              port: 8080
-            initialDelaySeconds: 10
-            periodSeconds: 10
+          - name: kserve-container
+            image: docker.io/balakalyandocker/cpiflow-serve:py312-v1
+            ports:
+              - name: http1
+                containerPort: 8080
+                protocol: TCP
+            command: ["/bin/sh","-c"]
+            args:
+              - >
+                set -e &&
+                uvicorn --app-dir /app/src serve_cpiflow_kserve:app --host 0.0.0.0 --port 8080
+            env:
+              - name: STORAGE_URI
+                value: "{{inputs.artifacts.cpiflowmodel}}"
